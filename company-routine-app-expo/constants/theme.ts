@@ -6,6 +6,7 @@ export const THEME_COLORS = {
     card: '#1E293B',       // Dark Slate
     textMain: '#F8FAFC',   // White
     textSub: '#94A3B8',    // Light Gray
+    text: '#F8FAFC',       // Alias for textMain (used by ThemedText)
     primary: '#3B82F6',    // Bright Blue
     border: '#334155',     // Slate
     tint: '#3B82F6',
@@ -19,6 +20,7 @@ export const THEME_COLORS = {
     card: '#FFFFFF',       // White
     textMain: '#0F172A',   // Slate Black
     textSub: '#64748B',    // Gray
+    text: '#0F172A',       // Alias for textMain (used by ThemedText)
     primary: '#2563EB',    // Deep Blue
     border: '#E2E8F0',     // Light Gray
     tint: '#2563EB',
@@ -26,6 +28,20 @@ export const THEME_COLORS = {
     tabIconDefault: '#64748B',
     tabIconSelected: '#2563EB',
     shadow: '#CBD5E1',
+  },
+  pink: {
+    background: '#FFF5FA', // Soft Pastel Pink
+    card: '#FFE4F1',       // Baby Pink Card
+    textMain: '#4A4A4A',   // Dark Gray for Readability
+    textSub: '#FF8CBA',    // Deep Pastel Pink
+    text: '#4A4A4A',       // Alias for textMain (used by ThemedText)
+    primary: '#FF7EB6',    // Lovely Pink
+    border: '#FFD1E8',     // Light Pink Border
+    tint: '#FF7EB6',
+    icon: '#FFB6D9',
+    tabIconDefault: '#FFB6D9',
+    tabIconSelected: '#FF7EB6',
+    shadow: '#E2E8F0',
   },
 };
 

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { DarkTheme, DefaultTheme, ThemeProvider as NavigationProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavigationProvider, Theme } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,11 +8,24 @@ import 'react-native-reanimated';
 import { THEME_COLORS } from '@/constants/theme';
 import { JOB_STORAGE_KEY, JobType } from '@/constants/jobs';
 
+const PinkTheme: Theme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: '#FF7EB6',
+    background: '#FFF5FA',
+    card: '#FFE4F1',
+    text: '#4A4A4A',
+    border: '#FFD1E8',
+    notification: '#FF7EB6',
+  },
+};
+
 const THEME_STORAGE_KEY = '@theme_preference';
 const ROUTINE_DATA_KEY = '@routine_completion_data';
 const ROUTINE_LIST_KEY = '@routine_list_data';
 
-type ThemeMode = 'light' | 'dark';
+type ThemeMode = 'light' | 'dark' | 'pink';
 
 interface Routine {
   id: number;
@@ -21,7 +34,8 @@ interface Routine {
 
 interface AppContextType {
   theme: ThemeMode;
-  toggleTheme: () => void;
+  toggleTheme: () => Promise<void>;
+  setTheme: (mode: ThemeMode) => Promise<void>;
   colors: typeof THEME_COLORS.dark;
   
   // Data
@@ -60,7 +74,7 @@ const DEFAULT_ROUTINES: Routine[] = [
 ];
 
 export default function RootLayout() {
-  const [theme, setTheme] = useState<ThemeMode>('dark');
+  const [theme, setThemeState] = useState<ThemeMode>('dark');
   const [selectedJob, setSelectedJob] = useState<JobType | null>(null);
   const [routines, setRoutines] = useState<Routine[]>(DEFAULT_ROUTINES);
   const [completionData, setCompletionData] = useState<{ [key: string]: number[] }>({});
@@ -79,7 +93,9 @@ export default function RootLayout() {
         AsyncStorage.getItem(ROUTINE_DATA_KEY),
       ]);
 
-      if (savedTheme === 'light' || savedTheme === 'dark') setTheme(savedTheme);
+      if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'pink') {
+        setThemeState(savedTheme as ThemeMode);
+      }
       if (savedJob) setSelectedJob(savedJob as JobType);
       if (savedRoutines) setRoutines(JSON.parse(savedRoutines));
       if (savedCompletion) setCompletionData(JSON.parse(savedCompletion));
@@ -90,10 +106,18 @@ export default function RootLayout() {
     }
   };
 
+  const setTheme = async (mode: ThemeMode) => {
+    setThemeState(mode);
+    await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
+  };
+
   const toggleTheme = async () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    await AsyncStorage.setItem(THEME_STORAGE_KEY, newTheme);
+    let newTheme: ThemeMode = 'light';
+    if (theme === 'light') newTheme = 'dark';
+    else if (theme === 'dark') newTheme = 'pink';
+    else if (theme === 'pink') newTheme = 'light';
+    
+    await setTheme(newTheme);
   };
 
   const updateJob = async (job: JobType) => {
@@ -127,32 +151,34 @@ export default function RootLayout() {
     await AsyncStorage.setItem(ROUTINE_DATA_KEY, JSON.stringify(nextCompletionData));
   };
 
-  if (!isLoaded) return null;
-
   const colors = THEME_COLORS[theme];
+
+  const navTheme = theme === 'light' ? DefaultTheme : theme === 'pink' ? PinkTheme : DarkTheme;
 
   return (
     <SafeAreaProvider>
-      <AppContext.Provider value={{ 
-        theme, 
-        toggleTheme, 
-        colors, 
-        selectedJob, 
-        updateJob, 
-        routines, 
-        addRoutine, 
-        deleteRoutine, 
-        completionData, 
+      <AppContext.Provider value={{
+        theme,
+        toggleTheme,
+        setTheme,
+        colors,
+        selectedJob,
+        updateJob,
+        routines,
+        addRoutine,
+        deleteRoutine,
+        completionData,
         toggleRoutineCompletion,
-        isLoaded 
+        isLoaded
       }}>
-        <NavigationProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>
+        <NavigationProvider value={navTheme}>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'fade' }} />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            <Stack.Screen name="+not-found" options={{ title: '페이지 없음' }} />
           </Stack>
-          <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+          <StatusBar style={theme === 'light' ? 'dark' : 'light'} />
         </NavigationProvider>
       </AppContext.Provider>
     </SafeAreaProvider>

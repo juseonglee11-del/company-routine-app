@@ -76,9 +76,9 @@ export default function StatsScreen() {
       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
         <View style={styles.emptyContainer}>
           <Ionicons name="bar-chart-outline" size={80} color={colors.border} />
-          <Text style={[styles.emptyTitle, { color: colors.textMain }]}>아직 기록이 없습니다</Text>
+          <Text style={[styles.emptyTitle, { color: colors.textMain }]}>아직 기록이 없어요</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSub }]}>
-            루틴을 완료하고 당신의 성장을 기록해 보세요!
+            루틴을 완료하면 여기서 성장 기록을 확인할 수 있어요 🌱
           </Text>
         </View>
       </SafeAreaView>
@@ -89,7 +89,7 @@ export default function StatsScreen() {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
-        <Text style={[styles.title, { color: colors.textMain }]}>나의 성장 통계</Text>
+        <Text style={[styles.title, { color: colors.textMain }]}>나의 성장 통계 📊</Text>
 
         {/* Career Summary */}
         <View style={styles.row}>

@@ -6,38 +6,87 @@ import {
   TouchableOpacity,
   ScrollView,
   SafeAreaView,
-  Switch,
   Alert,
-  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../_layout';
-
 import { JOB_CHARACTERS } from '@/constants/jobs';
 
+type ThemeMode = 'light' | 'dark' | 'pink';
+
+const ThemeOption = ({
+  mode,
+  label,
+  icon,
+  currentTheme,
+  colors,
+  onPress,
+}: {
+  mode: ThemeMode;
+  label: string;
+  icon: any;
+  currentTheme: string;
+  colors: any;
+  onPress: (mode: ThemeMode) => void;
+}) => {
+  const isSelected = currentTheme === mode;
+  return (
+    <TouchableOpacity
+      style={[
+        styles.themeOption,
+        {
+          backgroundColor: isSelected ? colors.primary + '20' : colors.card,
+          borderColor: isSelected ? colors.primary : colors.border,
+        },
+      ]}
+      onPress={() => onPress(mode)}
+    >
+      <Ionicons name={icon} size={20} color={isSelected ? colors.primary : colors.textSub} />
+      <Text style={[styles.themeLabel, { color: isSelected ? colors.primary : colors.textMain }]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
 export default function SettingsScreen() {
-  const { theme, toggleTheme, colors, selectedJob } = useAppTheme();
+  const { theme, setTheme, colors, selectedJob } = useAppTheme();
   const router = useRouter();
 
   const handleAction = (label: string) => {
     Alert.alert('준비 중', `${label} 기능은 다음 업데이트에 포함될 예정입니다.`);
   };
 
-  const handleReselectJob = () => {
-    Alert.alert('직종 다시 선택', '직종 선택 화면으로 이동하시겠습니까?', [
+  const handleChangeJob = () => {
+    Alert.alert('직종 변경', '직종 선택 화면으로 이동하시겠습니까?', [
       { text: '취소', style: 'cancel' },
-      { text: '이동', onPress: () => router.push('/onboarding') }
+      { text: '이동', onPress: () => router.push('/onboarding') },
     ]);
   };
 
-  const currentJobLabel = selectedJob ? JOB_CHARACTERS[selectedJob].label : '미설정';
+  const currentJobLabel =
+    selectedJob && JOB_CHARACTERS[selectedJob] ? JOB_CHARACTERS[selectedJob].label : '미설정';
+  const currentJobEmoji =
+    selectedJob && JOB_CHARACTERS[selectedJob] ? JOB_CHARACTERS[selectedJob].emoji : '❓';
 
-  const SettingItem = ({ icon, label, value, type = 'arrow', onPress }: any) => (
-    <TouchableOpacity 
+  const SettingItem = ({
+    icon,
+    label,
+    value,
+    onPress,
+    valueEmoji,
+  }: {
+    icon: any;
+    label: string;
+    value?: string;
+    valueEmoji?: string;
+    onPress: () => void;
+  }) => (
+    <TouchableOpacity
       style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}
-      onPress={type === 'switch' ? undefined : onPress}
-      activeOpacity={type === 'switch' ? 1 : 0.7}
+      onPress={onPress}
+      activeOpacity={0.7}
     >
       <View style={styles.itemLeft}>
         <View style={[styles.iconBox, { backgroundColor: colors.primary + '15' }]}>
@@ -46,19 +95,13 @@ export default function SettingsScreen() {
         <Text style={[styles.itemLabel, { color: colors.textMain }]}>{label}</Text>
       </View>
       <View style={styles.itemRight}>
-        {type === 'switch' ? (
-          <Switch 
-            value={theme === 'dark'} 
-            onValueChange={toggleTheme}
-            trackColor={{ false: colors.border, true: colors.primary + '50' }}
-            thumbColor={theme === 'dark' ? colors.primary : '#f4f3f4'}
-          />
-        ) : (
-          <>
-            {value && <Text style={[styles.itemValue, { color: colors.textSub }]}>{value}</Text>}
-            <Ionicons name="chevron-forward" size={18} color={colors.textSub} />
-          </>
-        )}
+        {valueEmoji ? (
+          <Text style={styles.valueEmoji}>{valueEmoji}</Text>
+        ) : null}
+        {value ? (
+          <Text style={[styles.itemValue, { color: colors.textSub }]}>{value}</Text>
+        ) : null}
+        <Ionicons name="chevron-forward" size={18} color={colors.textSub} />
       </View>
     </TouchableOpacity>
   );
@@ -66,61 +109,84 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
+
         <Text style={[styles.title, { color: colors.textMain }]}>설정</Text>
 
-        <Text style={[styles.sectionTitle, { color: colors.textSub }]}>개인화</Text>
-        <SettingItem 
-          icon={theme === 'dark' ? "moon" : "sunny"} 
-          label="다크 모드" 
-          type="switch" 
+        {/* 테마 설정 */}
+        <Text style={[styles.sectionTitle, { color: colors.textSub }]}>테마 설정</Text>
+        <View style={styles.themeGrid}>
+          <ThemeOption
+            mode="light"
+            label="라이트"
+            icon="sunny"
+            currentTheme={theme}
+            colors={colors}
+            onPress={setTheme}
+          />
+          <ThemeOption
+            mode="dark"
+            label="다크"
+            icon="moon"
+            currentTheme={theme}
+            colors={colors}
+            onPress={setTheme}
+          />
+          <ThemeOption
+            mode="pink"
+            label="핑크"
+            icon="color-palette"
+            currentTheme={theme}
+            colors={colors}
+            onPress={setTheme}
+          />
+        </View>
+
+        {/* 개인화 */}
+        <Text style={[styles.sectionTitle, { color: colors.textSub, marginTop: 28 }]}>개인화</Text>
+        <SettingItem
+          icon="briefcase-outline"
+          label="나의 직종"
+          valueEmoji={currentJobEmoji}
+          value={currentJobLabel}
+          onPress={handleChangeJob}
         />
-        <SettingItem 
-          icon="person-outline" 
-          label="프로필 정보" 
-          value="개발자 이주성"
+        <SettingItem
+          icon="person-outline"
+          label="프로필 정보"
           onPress={() => handleAction('프로필 정보 수정')}
         />
-        <SettingItem 
-          icon="construct-outline" 
-          label="나의 직종 관리" 
-          value={currentJobLabel}
-          onPress={() => handleAction('직종 관리')}
-        />
-        <SettingItem 
-          icon="refresh-outline" 
-          label="직종 다시 선택" 
-          onPress={handleReselectJob}
-        />
 
-        <Text style={[styles.sectionTitle, { color: colors.textSub, marginTop: 30 }]}>앱 설정</Text>
-        <SettingItem 
-          icon="notifications-outline" 
-          label="알림 설정" 
+        {/* 앱 설정 */}
+        <Text style={[styles.sectionTitle, { color: colors.textSub, marginTop: 28 }]}>앱 설정</Text>
+        <SettingItem
+          icon="notifications-outline"
+          label="알림 설정"
           onPress={() => handleAction('알림 설정')}
         />
-        <SettingItem 
-          icon="shield-checkmark-outline" 
-          label="데이터 백업 및 복원" 
+        <SettingItem
+          icon="shield-checkmark-outline"
+          label="데이터 백업 및 복원"
           onPress={() => handleAction('데이터 백업')}
         />
-        <SettingItem 
-          icon="help-circle-outline" 
-          label="고객 지원" 
+        <SettingItem
+          icon="help-circle-outline"
+          label="고객 지원"
           onPress={() => handleAction('고객 지원')}
         />
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.logoutButton}
-          onPress={() => Alert.alert('로그아웃', '정말 로그아웃 하시겠습니까?', [
-            { text: '취소', style: 'cancel' },
-            { text: '확인', onPress: () => handleAction('로그아웃 완료') }
-          ])}
+          onPress={() =>
+            Alert.alert('로그아웃', '정말 로그아웃 하시겠습니까?', [
+              { text: '취소', style: 'cancel' },
+              { text: '확인', onPress: () => handleAction('로그아웃 완료') },
+            ])
+          }
         >
           <Text style={styles.logoutText}>로그아웃</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.version, { color: colors.textSub }]}>Version 1.0.0 (Build 12)</Text>
+        <Text style={[styles.version, { color: colors.textSub }]}>차곡차곡 v1.0.0</Text>
 
       </ScrollView>
     </SafeAreaView>
@@ -129,24 +195,32 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 140 }, // Fix for Android/iOS overlap
-  title: { fontSize: 24, fontWeight: '800', marginBottom: 30 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', marginLeft: 4, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 },
-  item: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    padding: 16, 
-    borderRadius: 18, 
-    borderWidth: 1, 
-    marginBottom: 12 
+  scrollContent: { padding: 20, paddingBottom: 140 },
+  title: { fontSize: 24, fontWeight: '800', marginBottom: 28 },
+  sectionTitle: {
+    fontSize: 12, fontWeight: '700', marginLeft: 4, marginBottom: 12,
+    textTransform: 'uppercase', letterSpacing: 1,
+  },
+  themeGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  themeOption: {
+    flex: 1, marginHorizontal: 4, padding: 16,
+    borderRadius: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center',
+  },
+  themeLabel: { fontSize: 13, fontWeight: '700', marginTop: 8 },
+  item: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: 16, borderRadius: 18, borderWidth: 1, marginBottom: 10,
   },
   itemLeft: { flexDirection: 'row', alignItems: 'center' },
-  iconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  iconBox: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+  },
   itemLabel: { fontSize: 15, fontWeight: '600' },
   itemRight: { flexDirection: 'row', alignItems: 'center' },
-  itemValue: { fontSize: 14, marginRight: 8 },
-  logoutButton: { marginTop: 40, alignItems: 'center', padding: 15 },
+  valueEmoji: { fontSize: 16, marginRight: 4 },
+  itemValue: { fontSize: 14, marginRight: 6 },
+  logoutButton: { marginTop: 36, alignItems: 'center', padding: 15 },
   logoutText: { color: '#FF3B30', fontSize: 16, fontWeight: '700' },
-  version: { textAlign: 'center', marginTop: 20, fontSize: 12, fontWeight: '500' },
+  version: { textAlign: 'center', marginTop: 16, fontSize: 12, fontWeight: '500' },
 });

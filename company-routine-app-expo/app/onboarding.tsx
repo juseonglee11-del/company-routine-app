@@ -14,6 +14,7 @@ import { useAppTheme } from './_layout';
 import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
+const CARD_WIDTH = (width - 60) / 2;
 
 export default function OnboardingScreen() {
   const { colors, updateJob } = useAppTheme();
@@ -37,12 +38,12 @@ export default function OnboardingScreen() {
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textMain }]}>환영합니다! ✨</Text>
           <Text style={[styles.subtitle, { color: colors.textSub }]}>
-            당신의 성장을 관리해 드릴게요.{"\n"}현재 직종을 선택해 주세요.
+            차곡차곡 성장을 도와드릴게요.{'\n'}현재 직종을 선택해 주세요.
           </Text>
         </View>
 
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent} 
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.grid}>
@@ -53,26 +54,27 @@ export default function OnboardingScreen() {
                 <TouchableOpacity
                   key={key}
                   onPress={() => setSelectedJob(key)}
+                  activeOpacity={0.85}
                   style={[
                     styles.jobCard,
-                    { 
-                      backgroundColor: isSelected ? item.color + '20' : colors.card, 
+                    {
+                      backgroundColor: isSelected ? item.secondaryColor : colors.card,
                       borderColor: isSelected ? item.color : colors.border,
-                      width: (width - 60) / 2
-                    }
+                      width: CARD_WIDTH,
+                    },
                   ]}
                 >
-                  <View style={[styles.emojiContainer, { backgroundColor: isSelected ? '#fff' : colors.background + '50' }]}>
-                    <Text style={styles.emoji}>{item.emoji}</Text>
-                  </View>
-                  <Text style={[styles.jobLabel, { color: isSelected ? item.color : colors.textMain }]}>
-                    {item.label}
-                  </Text>
                   {isSelected && (
                     <View style={[styles.checkCircle, { backgroundColor: item.color }]}>
                       <Ionicons name="checkmark" size={12} color="#fff" />
                     </View>
                   )}
+                  <View style={[styles.emojiContainer, { backgroundColor: isSelected ? '#fff' : item.secondaryColor }]}>
+                    <Text style={styles.jobEmoji}>{item.emoji}</Text>
+                  </View>
+                  <Text style={[styles.jobLabel, { color: isSelected ? item.color : colors.textMain }]}>
+                    {item.label}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
@@ -83,7 +85,7 @@ export default function OnboardingScreen() {
           <TouchableOpacity
             style={[
               styles.button,
-              { backgroundColor: selectedJob ? colors.primary : colors.border }
+              { backgroundColor: selectedJob ? colors.primary : colors.border },
             ]}
             onPress={handleComplete}
             disabled={!selectedJob}
@@ -102,7 +104,7 @@ const styles = StyleSheet.create({
   header: { padding: 30, paddingTop: 40 },
   title: { fontSize: 28, fontWeight: '800', marginBottom: 10 },
   subtitle: { fontSize: 16, lineHeight: 24, fontWeight: '500' },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 120 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   jobCard: {
     borderRadius: 24,
@@ -111,27 +113,37 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     alignItems: 'center',
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  emojiContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  emoji: { fontSize: 32 },
-  jobLabel: { fontSize: 15, fontWeight: '700' },
   checkCircle: {
     position: 'absolute',
     top: 10,
     right: 10,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  emojiContainer: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  jobEmoji: { fontSize: 36 },
+  jobLabel: { fontSize: 15, fontWeight: '700' },
   footer: {
     padding: 20,
     paddingBottom: 40,
