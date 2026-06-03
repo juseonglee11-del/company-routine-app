@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   View,
@@ -6,180 +6,120 @@ import {
   TouchableOpacity,
   ScrollView,
   SafeAreaView,
-  TextInput,
-  Modal,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { format, differenceInMonths, parseISO } from 'date-fns';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { format } from 'date-fns';
 import { useAppTheme } from '../_layout';
-
-interface CareerEntry {
-  id: string;
-  company: string;
-  role: string;
-  startDate: string;
-  endDate: string; // 'Present' or ISO date
-  achievements: string;
-}
+import { JOB_CHARACTERS } from '@/constants/jobs';
+import { JOIN_DATE_KEY } from '@/constants/jobs';
+import { useState, useEffect } from 'react';
 
 export default function CareerScreen() {
-  const { colors } = useAppTheme();
-  const [entries, setEntries] = useState<CareerEntry[]>([
-    {
-      id: '1',
-      company: '테크 코퍼레이션',
-      role: '시니어 개발자',
-      startDate: '2022-03-01',
-      endDate: '2023-12-31',
-      achievements: '매출 20% 향상 기여, 시스템 아키텍처 개선',
-    },
-    {
-      id: '2',
-      company: '현재 회사',
-      role: '리드 엔지니어',
-      startDate: '2024-01-01',
-      endDate: 'Present',
-      achievements: '신규 프로젝트 리딩, 팀 생산성 30% 개선',
-    },
-  ]);
+  const { colors, userProfile, selectedJob } = useAppTheme();
+  const [joinDate, setJoinDate] = useState<Date | null>(null);
 
-  const [modalVisible, setModalVisible] = useState(false);
-  const [newEntry, setNewEntry] = useState<Partial<CareerEntry>>({});
+  useEffect(() => {
+    AsyncStorage.getItem(JOIN_DATE_KEY).then(val => {
+      if (val) setJoinDate(new Date(val));
+    });
+  }, []);
 
-  const totalCareerMonths = useMemo(() => {
-    return entries.reduce((acc, entry) => {
-      const start = parseISO(entry.startDate);
-      const end = entry.endDate === 'Present' ? new Date() : parseISO(entry.endDate);
-      return acc + differenceInMonths(end, start) + 1;
-    }, 0);
-  }, [entries]);
+  const currentChar = selectedJob && JOB_CHARACTERS[selectedJob]
+    ? JOB_CHARACTERS[selectedJob]
+    : null;
 
-  const totalCareerStr = useMemo(() => {
-    const years = Math.floor(totalCareerMonths / 12);
-    const months = totalCareerMonths % 12;
-    if (years === 0) return `${months}개월`;
-    return `${years}년 ${months}개월`;
-  }, [totalCareerMonths]);
-
-  const handleAddEntry = () => {
-    if (newEntry.company && newEntry.role && newEntry.startDate) {
-      const entry: CareerEntry = {
-        id: Date.now().toString(),
-        company: newEntry.company,
-        role: newEntry.role,
-        startDate: newEntry.startDate,
-        endDate: newEntry.endDate || 'Present',
-        achievements: newEntry.achievements || '',
-      };
-      setEntries([entry, ...entries]);
-      setModalVisible(false);
-      setNewEntry({});
-    }
-  };
-
-  const deleteEntry = (id: string) => {
-    setEntries(entries.filter(e => e.id !== id));
+  const formatPeriod = (start: Date | null) => {
+    if (!start) return '입사일 미등록';
+    return `${format(start, 'yyyy.MM.dd')} ~ 재직 중`;
   };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textMain }]}>커리어 이력</Text>
-          <View style={[styles.totalBadge, { backgroundColor: colors.primary + '20' }]}>
-            <Text style={[styles.totalLabel, { color: colors.textSub }]}>총 경력</Text>
-            <Text style={[styles.totalValue, { color: colors.primary }]}>{totalCareerStr}</Text>
+
+        <Text style={[styles.title, { color: colors.textMain }]}>커리어</Text>
+        <Text style={[styles.subtitle, { color: colors.textSub }]}>나의 경력을 한눈에 관리해보세요</Text>
+
+        {/* 현재 재직 중 카드 */}
+        <Text style={[styles.sectionLabel, { color: colors.textSub }]}>현재 회사</Text>
+        {currentChar && userProfile ? (
+          <View style={[styles.careerCard, { backgroundColor: colors.card, borderColor: currentChar.color + '40' }]}>
+            <View style={[styles.careerCardAccent, { backgroundColor: currentChar.color }]} />
+            <View style={styles.careerCardBody}>
+              <View style={styles.careerCardHeader}>
+                <View style={[styles.jobIconBg, { backgroundColor: currentChar.secondaryColor }]}>
+                  <Text style={styles.jobEmoji}>{currentChar.emoji}</Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.companyName, { color: colors.textMain }]}>현재 회사</Text>
+                  <Text style={[styles.jobTitle, { color: currentChar.color }]}>{currentChar.label}</Text>
+                </View>
+                <View style={[styles.activeBadge, { backgroundColor: currentChar.color + '20' }]}>
+                  <View style={[styles.activeDot, { backgroundColor: currentChar.color }]} />
+                  <Text style={[styles.activeBadgeText, { color: currentChar.color }]}>재직 중</Text>
+                </View>
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.periodRow}>
+                <Ionicons name="calendar-outline" size={14} color={colors.textSub} />
+                <Text style={[styles.periodText, { color: colors.textSub }]}>
+                  {formatPeriod(joinDate)}
+                </Text>
+              </View>
+              {!joinDate && (
+                <Text style={[styles.noDateHint, { color: colors.primary }]}>
+                  홈 화면에서 입사일을 등록하면 자동으로 표시됩니다
+                </Text>
+              )}
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Ionicons name="briefcase-outline" size={32} color={colors.textSub} />
+            <Text style={[styles.emptyText, { color: colors.textSub }]}>직종을 선택하면 현재 재직 정보가 표시됩니다</Text>
+          </View>
+        )}
+
+        {/* 이전 경력 섹션 — 준비 중 */}
+        <Text style={[styles.sectionLabel, { color: colors.textSub, marginTop: 28 }]}>이전 경력</Text>
+        <View style={[styles.comingSoonCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name="time-outline" size={28} color={colors.textSub} />
+          <Text style={[styles.comingSoonTitle, { color: colors.textMain }]}>곧 추가될 기능이에요</Text>
+          <Text style={[styles.comingSoonDesc, { color: colors.textSub }]}>
+            이전 회사의 경력을 추가하고{'\n'}전체 커리어를 한눈에 관리할 수 있어요
+          </Text>
+
+          {/* 미리보기 예시 카드 */}
+          <View style={[styles.previewCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={styles.previewRow}>
+              <Text style={[styles.previewLabel, { color: colors.textSub }]}>회사명</Text>
+              <Text style={[styles.previewValue, { color: colors.textMain }]}>이전 회사명</Text>
+            </View>
+            <View style={styles.previewRow}>
+              <Text style={[styles.previewLabel, { color: colors.textSub }]}>직무</Text>
+              <Text style={[styles.previewValue, { color: colors.textMain }]}>품질관리(PQC)</Text>
+            </View>
+            <View style={styles.previewRow}>
+              <Text style={[styles.previewLabel, { color: colors.textSub }]}>기간</Text>
+              <Text style={[styles.previewValue, { color: colors.textMain }]}>2022.10 ~ 2024.03</Text>
+            </View>
           </View>
         </View>
 
-        {entries.map((entry) => (
-          <View key={entry.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.cardHeader}>
-              <View>
-                <Text style={[styles.companyName, { color: colors.textMain }]}>{entry.company}</Text>
-                <Text style={[styles.roleName, { color: colors.textSub }]}>{entry.role}</Text>
-              </View>
-              <TouchableOpacity onPress={() => deleteEntry(entry.id)}>
-                <Ionicons name="trash-outline" size={20} color={colors.textSub} />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.periodRow}>
-              <Ionicons name="calendar-outline" size={14} color={colors.primary} style={{ marginRight: 6 }} />
-              <Text style={[styles.periodText, { color: colors.textSub }]}>
-                {entry.startDate} ~ {entry.endDate === 'Present' ? '재직 중' : entry.endDate}
-              </Text>
-            </View>
-
-            <View style={[styles.achievementBox, { backgroundColor: colors.background + '50' }]}>
-              <Text style={[styles.achievementTitle, { color: colors.textMain }]}>주요 성과</Text>
-              <Text style={[styles.achievementText, { color: colors.textSub }]}>{entry.achievements}</Text>
-            </View>
-          </View>
-        ))}
-
-        <TouchableOpacity 
-          style={[styles.addButton, { backgroundColor: colors.primary }]}
-          onPress={() => setModalVisible(true)}
+        {/* 추가 버튼 — 비활성 */}
+        <TouchableOpacity
+          style={[styles.addBtn, { backgroundColor: colors.border }]}
+          activeOpacity={0.7}
+          disabled
         >
-          <Ionicons name="add" size={24} color="#FFFFFF" />
-          <Text style={styles.addButtonText}>이력 추가하기</Text>
+          <Ionicons name="add" size={20} color={colors.textSub} />
+          <Text style={[styles.addBtnText, { color: colors.textSub }]}>경력 추가하기 (준비 중)</Text>
         </TouchableOpacity>
 
       </ScrollView>
-
-      {/* Add Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-            <Text style={[styles.modalTitle, { color: colors.textMain }]}>경력 추가</Text>
-            
-            <TextInput 
-              style={[styles.input, { backgroundColor: colors.background, color: colors.textMain, borderColor: colors.border }]}
-              placeholder="회사명"
-              placeholderTextColor={colors.textSub}
-              onChangeText={(val) => setNewEntry({...newEntry, company: val})}
-            />
-            <TextInput 
-              style={[styles.input, { backgroundColor: colors.background, color: colors.textMain, borderColor: colors.border }]}
-              placeholder="담당 업무 / 직무"
-              placeholderTextColor={colors.textSub}
-              onChangeText={(val) => setNewEntry({...newEntry, role: val})}
-            />
-            <TextInput 
-              style={[styles.input, { backgroundColor: colors.background, color: colors.textMain, borderColor: colors.border }]}
-              placeholder="입사일 (YYYY-MM-DD)"
-              placeholderTextColor={colors.textSub}
-              onChangeText={(val) => setNewEntry({...newEntry, startDate: val})}
-            />
-            <TextInput 
-              style={[styles.input, { backgroundColor: colors.background, color: colors.textMain, borderColor: colors.border }]}
-              placeholder="퇴사일 (재직중이면 비워두세요)"
-              placeholderTextColor={colors.textSub}
-              onChangeText={(val) => setNewEntry({...newEntry, endDate: val})}
-            />
-            <TextInput 
-              style={[styles.input, { backgroundColor: colors.background, color: colors.textMain, borderColor: colors.border, height: 80 }]}
-              placeholder="성과 기록"
-              placeholderTextColor={colors.textSub}
-              multiline
-              onChangeText={(val) => setNewEntry({...newEntry, achievements: val})}
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
-                <Text style={{ color: colors.textSub }}>취소</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.saveButton, { backgroundColor: colors.primary }]} onPress={handleAddEntry}>
-                <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>저장</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
     </SafeAreaView>
   );
 }
@@ -187,27 +127,70 @@ export default function CareerScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 140 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  title: { fontSize: 24, fontWeight: '800' },
-  totalBadge: { padding: 10, borderRadius: 15, alignItems: 'center' },
-  totalLabel: { fontSize: 10, fontWeight: '700', marginBottom: 2 },
-  totalValue: { fontSize: 16, fontWeight: '800' },
-  card: { borderRadius: 20, borderWidth: 1, padding: 20, marginBottom: 16 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  companyName: { fontSize: 18, fontWeight: '700' },
-  roleName: { fontSize: 14, fontWeight: '600', marginTop: 2 },
-  periodRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  periodText: { fontSize: 13, fontWeight: '500' },
-  achievementBox: { padding: 12, borderRadius: 12 },
-  achievementTitle: { fontSize: 12, fontWeight: '700', marginBottom: 6 },
-  achievementText: { fontSize: 13, lineHeight: 18 },
-  addButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 15, marginTop: 10 },
-  addButtonText: { color: '#FFFFFF', fontWeight: '700', marginLeft: 8 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-  modalContent: { borderRadius: 24, padding: 24 },
-  modalTitle: { fontSize: 20, fontWeight: '800', marginBottom: 20 },
-  input: { height: 50, borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, marginBottom: 12 },
-  modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10 },
-  cancelButton: { padding: 12, marginRight: 10 },
-  saveButton: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
+
+  title: { fontSize: 24, fontWeight: '800', marginBottom: 6 },
+  subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 28 },
+  sectionLabel: {
+    fontSize: 11, fontWeight: '700', textTransform: 'uppercase',
+    letterSpacing: 0.8, marginBottom: 12,
+  },
+
+  // 재직 중 카드
+  careerCard: {
+    borderRadius: 22, borderWidth: 1.5, overflow: 'hidden',
+    flexDirection: 'row', marginBottom: 4,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08, shadowRadius: 10, elevation: 4,
+  },
+  careerCardAccent: { width: 5 },
+  careerCardBody: { flex: 1, padding: 18 },
+  careerCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  jobIconBg: {
+    width: 46, height: 46, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  jobEmoji: { fontSize: 24 },
+  companyName: { fontSize: 16, fontWeight: '800' },
+  jobTitle: { fontSize: 13, fontWeight: '700', marginTop: 2 },
+  activeBadge: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+  },
+  activeDot: { width: 7, height: 7, borderRadius: 4, marginRight: 5 },
+  activeBadgeText: { fontSize: 12, fontWeight: '700' },
+  divider: { height: 1, opacity: 0.25, marginBottom: 12 },
+  periodRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  periodText: { fontSize: 13, fontWeight: '600' },
+  noDateHint: { fontSize: 11, fontWeight: '600', marginTop: 8 },
+
+  // 빈 상태
+  emptyCard: {
+    borderRadius: 20, borderWidth: 1, padding: 28,
+    alignItems: 'center', gap: 12,
+  },
+  emptyText: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
+
+  // 준비 중 카드
+  comingSoonCard: {
+    borderRadius: 22, borderWidth: 1.5, padding: 24,
+    alignItems: 'center', gap: 8,
+  },
+  comingSoonTitle: { fontSize: 16, fontWeight: '800', marginTop: 4 },
+  comingSoonDesc: { fontSize: 13, fontWeight: '500', textAlign: 'center', lineHeight: 20 },
+
+  // 미리보기 예시
+  previewCard: {
+    width: '100%', borderRadius: 14, borderWidth: 1, padding: 14,
+    marginTop: 12, gap: 8,
+  },
+  previewRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  previewLabel: { fontSize: 12, fontWeight: '600' },
+  previewValue: { fontSize: 12, fontWeight: '700' },
+
+  // 추가 버튼
+  addBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    padding: 16, borderRadius: 18, marginTop: 20, gap: 8,
+  },
+  addBtnText: { fontSize: 15, fontWeight: '700' },
 });

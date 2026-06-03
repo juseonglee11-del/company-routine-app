@@ -8,12 +8,13 @@ import {
   SafeAreaView,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../_layout';
 import { JOB_CHARACTERS } from '@/constants/jobs';
 
-type ThemeMode = 'light' | 'dark' | 'pink';
+type ThemeMode = 'light' | 'dark' | 'pink' | 'blue' | 'green' | 'yellow';
 
 const ThemeOption = ({
   mode,
@@ -50,9 +51,24 @@ const ThemeOption = ({
   );
 };
 
+const THEME_STORAGE_KEY = '@theme_preference';
+
 export default function SettingsScreen() {
-  const { theme, setTheme, colors, selectedJob } = useAppTheme();
+  const { theme, setTheme, colors, selectedJob, userProfile } = useAppTheme();
   const router = useRouter();
+
+  const handleResetTheme = () => {
+    Alert.alert('테마 초기화', '테마를 라이트 모드로 초기화하시겠습니까?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '초기화',
+        onPress: async () => {
+          await AsyncStorage.removeItem(THEME_STORAGE_KEY);
+          await setTheme('light');
+        },
+      },
+    ]);
+  };
 
   const handleAction = (label: string) => {
     Alert.alert('준비 중', `${label} 기능은 다음 업데이트에 포함될 예정입니다.`);
@@ -139,7 +155,39 @@ export default function SettingsScreen() {
             colors={colors}
             onPress={setTheme}
           />
+          <ThemeOption
+            mode="blue"
+            label="블루"
+            icon="water"
+            currentTheme={theme}
+            colors={colors}
+            onPress={setTheme}
+          />
+          <ThemeOption
+            mode="green"
+            label="그린"
+            icon="leaf"
+            currentTheme={theme}
+            colors={colors}
+            onPress={setTheme}
+          />
+          <ThemeOption
+            mode="yellow"
+            label="옐로우"
+            icon="sunny-outline"
+            currentTheme={theme}
+            colors={colors}
+            onPress={setTheme}
+          />
         </View>
+        <TouchableOpacity
+          style={[styles.resetThemeButton, { borderColor: colors.border }]}
+          onPress={handleResetTheme}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="refresh-outline" size={15} color={colors.textSub} />
+          <Text style={[styles.resetThemeText, { color: colors.textSub }]}>테마 초기화 (라이트 모드로)</Text>
+        </TouchableOpacity>
 
         {/* 개인화 */}
         <Text style={[styles.sectionTitle, { color: colors.textSub, marginTop: 28 }]}>개인화</Text>
@@ -152,8 +200,9 @@ export default function SettingsScreen() {
         />
         <SettingItem
           icon="person-outline"
-          label="프로필 정보"
-          onPress={() => handleAction('프로필 정보 수정')}
+          label="내 정보 수정"
+          value={userProfile?.nickname}
+          onPress={() => router.push({ pathname: '/onboarding', params: { edit: 'true' } })}
         />
 
         {/* 앱 설정 */}
@@ -201,12 +250,17 @@ const styles = StyleSheet.create({
     fontSize: 12, fontWeight: '700', marginLeft: 4, marginBottom: 12,
     textTransform: 'uppercase', letterSpacing: 1,
   },
-  themeGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  themeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 8 },
   themeOption: {
-    flex: 1, marginHorizontal: 4, padding: 16,
+    width: '31%', marginBottom: 8, padding: 14,
     borderRadius: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center',
   },
   themeLabel: { fontSize: 13, fontWeight: '700', marginTop: 8 },
+  resetThemeButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 10, borderRadius: 12, borderWidth: 1, marginTop: 2, marginBottom: 4,
+  },
+  resetThemeText: { fontSize: 13, fontWeight: '600', marginLeft: 6 },
   item: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     padding: 16, borderRadius: 18, borderWidth: 1, marginBottom: 10,

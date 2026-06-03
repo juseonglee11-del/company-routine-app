@@ -43,6 +43,48 @@ export const THEME_COLORS = {
     tabIconSelected: '#FF7EB6',
     shadow: '#E2E8F0',
   },
+  blue: {
+    background: '#EFF6FF', // Light Sky Blue
+    card: '#DBEAFE',       // Soft Blue Card
+    textMain: '#1E3A5F',   // Deep Navy
+    textSub: '#60A5FA',    // Sky Blue
+    text: '#1E3A5F',
+    primary: '#3B82F6',    // Bright Blue
+    border: '#BFDBFE',     // Light Blue Border
+    tint: '#3B82F6',
+    icon: '#93C5FD',
+    tabIconDefault: '#93C5FD',
+    tabIconSelected: '#3B82F6',
+    shadow: '#BFDBFE',
+  },
+  green: {
+    background: '#F0FDF4', // Light Mint
+    card: '#DCFCE7',       // Soft Green Card
+    textMain: '#14532D',   // Deep Green
+    textSub: '#34D399',    // Mint
+    text: '#14532D',
+    primary: '#10B981',    // Emerald
+    border: '#A7F3D0',     // Light Mint Border
+    tint: '#10B981',
+    icon: '#6EE7B7',
+    tabIconDefault: '#6EE7B7',
+    tabIconSelected: '#10B981',
+    shadow: '#D1FAE5',
+  },
+  yellow: {
+    background: '#FFFBEB', // Cream Yellow
+    card: '#FEF9C3',       // Soft Yellow Card
+    textMain: '#4A3800',   // Deep Brown (readable)
+    textSub: '#D97706',    // Amber
+    text: '#4A3800',
+    primary: '#F59E0B',    // Gold Amber
+    border: '#FDE68A',     // Light Yellow Border
+    tint: '#F59E0B',
+    icon: '#FCD34D',
+    tabIconDefault: '#FCD34D',
+    tabIconSelected: '#F59E0B',
+    shadow: '#FEF3C7',
+  },
 };
 
 // Legacy Colors export for existing components if needed

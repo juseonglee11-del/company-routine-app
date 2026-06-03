@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,22 +9,29 @@ import {
   Platform,
   Modal,
   Dimensions,
+  TextInput,
+  Animated,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { format, differenceInDays, differenceInYears } from 'date-fns';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme } from '../_layout';
-import { JOB_CHARACTERS, JOIN_DATE_KEY, JobType } from '@/constants/jobs';
+import { JOB_CHARACTERS, JOB_CATEGORIES, JOIN_DATE_KEY, JobType } from '@/constants/jobs';
+import { Quote, getRandomQuote } from '@/constants/quotes';
 
 const { width } = Dimensions.get('window');
+const THEME_HINT_KEY = '@theme_hint_dismissed';
+const JOIN_DATE_HINT_KEY = '@join_date_hint_dismissed';
+const DAILY_QUOTE_KEY = '@daily_quote';
 
 export default function HomeScreen() {
   const {
     theme,
     toggleTheme,
     colors,
+    userProfile,
     selectedJob,
     updateJob,
     routines,
@@ -33,28 +40,92 @@ export default function HomeScreen() {
     isLoaded,
   } = useAppTheme();
   const router = useRouter();
-  const [joinDate, setJoinDate] = useState(new Date(2024, 0, 1));
+  const params = useLocalSearchParams<{ welcome?: string }>();
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const [joinDate, setJoinDate] = useState<Date | null>(null);
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [isJobModalVisible, setIsJobModalVisible] = useState(false);
+  const [modalCategoryKey, setModalCategoryKey] = useState<string | null>(null);
+  const [modalSearchQuery, setModalSearchQuery] = useState('');
+  const [showThemeHint, setShowThemeHint] = useState(false);
+  const [showJoinHint, setShowJoinHint] = useState(false);
+  const [dailyQuote, setDailyQuote] = useState<Quote>({ text: '작은 습관이 큰 변화를 만듭니다', icon: '🌱' });
 
   useEffect(() => {
     if (!isLoaded) return;
-    if (!selectedJob || !JOB_CHARACTERS[selectedJob]) {
+    if (!userProfile || !selectedJob || !JOB_CHARACTERS[selectedJob]) {
       router.replace('/onboarding');
     } else {
       loadJoinDate();
+      loadDailyQuote();
     }
-  }, [selectedJob, isLoaded]);
+  }, [userProfile, selectedJob, isLoaded]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(THEME_HINT_KEY).then(val => {
+      if (val === null) setShowThemeHint(true);
+    });
+    AsyncStorage.getItem(JOIN_DATE_HINT_KEY).then(val => {
+      if (val === null) setShowJoinHint(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (params.welcome !== '1') return;
+    Animated.sequence([
+      Animated.timing(toastOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.delay(2500),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const dismissThemeHint = async () => {
+    setShowThemeHint(false);
+    await AsyncStorage.setItem(THEME_HINT_KEY, 'true');
+  };
+
+  const handleToggleTheme = async () => {
+    await toggleTheme();
+    if (showThemeHint) await dismissThemeHint();
+  };
+
+  const loadDailyQuote = async () => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const saved = await AsyncStorage.getItem(DAILY_QUOTE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.date === today) {
+        setDailyQuote({ text: parsed.text, icon: parsed.icon });
+        return;
+      }
+    }
+    const quote = getRandomQuote();
+    setDailyQuote(quote);
+    await AsyncStorage.setItem(DAILY_QUOTE_KEY, JSON.stringify({ date: today, ...quote }));
+  };
+
+  const handleRefreshQuote = async () => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const quote = getRandomQuote(dailyQuote.text);
+    setDailyQuote(quote);
+    await AsyncStorage.setItem(DAILY_QUOTE_KEY, JSON.stringify({ date: today, ...quote }));
+  };
 
   const loadJoinDate = async () => {
     const saved = await AsyncStorage.getItem(JOIN_DATE_KEY);
     if (saved) setJoinDate(new Date(saved));
   };
 
+  const dismissJoinHint = async () => {
+    setShowJoinHint(false);
+    await AsyncStorage.setItem(JOIN_DATE_HINT_KEY, 'true');
+  };
+
   const handleConfirmDate = async (date: Date) => {
     setJoinDate(date);
     setDatePickerVisibility(false);
     await AsyncStorage.setItem(JOIN_DATE_KEY, date.toISOString());
+    if (showJoinHint) await dismissJoinHint();
   };
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -62,14 +133,16 @@ export default function HomeScreen() {
   const totalRoutinesCount = routines.length;
   const todayProgress = totalRoutinesCount > 0 ? (todayCompletedCount / totalRoutinesCount) * 100 : 0;
 
-  if (!isLoaded || !selectedJob || !JOB_CHARACTERS[selectedJob]) return null;
+  if (!isLoaded || !userProfile || !selectedJob || !JOB_CHARACTERS[selectedJob]) return null;
 
   const currentChar = JOB_CHARACTERS[selectedJob];
   const today = new Date();
-  const daysElapsed = differenceInDays(today, joinDate) + 1;
-  const yearsOfService = differenceInYears(today, joinDate);
+  const daysElapsed = joinDate ? differenceInDays(today, joinDate) + 1 : 0;
+  const yearsOfService = joinDate ? differenceInYears(today, joinDate) : 0;
   const months = Math.floor(daysElapsed / 30) % 12;
-  const totalTenure = yearsOfService > 0 ? `${yearsOfService}년 ${months}개월` : `${Math.floor(daysElapsed / 30)}개월`;
+  const totalTenure = yearsOfService > 0
+    ? `${yearsOfService}년 ${months}개월`
+    : `${Math.floor(daysElapsed / 30)}개월`;
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
@@ -78,9 +151,9 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={[styles.header, { marginTop: Platform.OS === 'android' ? 10 : 0 }]}>
           <View>
-            <Text style={[styles.greeting, { color: colors.textSub }]}>오늘도 차곡차곡 쌓아보자 🚀</Text>
+            <Text style={[styles.greeting, { color: colors.textSub }]}>오늘도 나답게 한 걸음씩 🚀</Text>
             <View style={styles.titleRow}>
-              <Text style={[styles.title, { color: colors.textMain }]}>차곡차곡</Text>
+              <Text style={[styles.title, { color: colors.textMain }]}>{userProfile.nickname}</Text>
               <TouchableOpacity
                 onPress={() => setIsJobModalVisible(true)}
                 style={[styles.characterMiniBtn, { backgroundColor: currentChar.secondaryColor }]}
@@ -90,13 +163,38 @@ export default function HomeScreen() {
             </View>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity onPress={toggleTheme} style={styles.iconButton}>
-              <Ionicons
-                name={theme === 'dark' ? 'moon' : theme === 'pink' ? 'color-palette' : 'sunny'}
-                size={24}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
+            <View style={styles.themeHintWrapper}>
+              <TouchableOpacity
+                onPress={handleToggleTheme}
+                style={[
+                  styles.iconButton,
+                  showThemeHint && { borderWidth: 2, borderColor: colors.primary, borderRadius: 20, padding: 3 },
+                ]}
+              >
+                <Ionicons
+                  name={
+                    theme === 'dark' ? 'moon' :
+                    theme === 'pink' ? 'color-palette' :
+                    theme === 'blue' ? 'water' :
+                    theme === 'green' ? 'leaf' :
+                    theme === 'yellow' ? 'sunny-outline' :
+                    'sunny'
+                  }
+                  size={24}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+              {showThemeHint && (
+                <TouchableOpacity
+                  onPress={dismissThemeHint}
+                  activeOpacity={0.8}
+                  style={[styles.themeHintBubble, { backgroundColor: colors.primary }]}
+                >
+                  <View style={[styles.themeHintArrow, { backgroundColor: colors.primary }]} />
+                  <Text style={styles.themeHintText}>배경을 변경해보세요</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <TouchableOpacity style={styles.iconButton}>
               <Ionicons name="notifications-outline" size={24} color={colors.textMain} />
             </TouchableOpacity>
@@ -104,41 +202,87 @@ export default function HomeScreen() {
         </View>
 
         {/* 1. 입사일 카드 */}
-        <TouchableOpacity
-          style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, shadowColor: colors.shadow }]}
-          onPress={() => setDatePickerVisibility(true)}
-          activeOpacity={0.9}
-        >
-          <View style={styles.cardContent}>
-            <View style={styles.cardInfo}>
-              <Text style={[styles.cardLabel, { color: colors.textSub }]}>입사일 (터치하여 변경)</Text>
-              <Text style={[styles.cardValue, { color: colors.textMain }]}>{format(joinDate, 'yyyy.MM.dd')}</Text>
-              <View style={styles.tenureContainer}>
-                <View style={[styles.badge, { backgroundColor: currentChar.color + '22' }]}>
-                  <Text style={[styles.badgeText, { color: currentChar.color }]}>D + {daysElapsed}</Text>
+        {joinDate ? (
+          // 등록 완료 — 근속 정보 카드
+          <TouchableOpacity
+            style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, shadowColor: colors.shadow }]}
+            onPress={() => setDatePickerVisibility(true)}
+            activeOpacity={0.9}
+          >
+            <View style={styles.cardContent}>
+              <View style={styles.cardInfo}>
+                <Text style={[styles.cardLabel, { color: colors.textSub }]}>입사일 (터치하여 변경)</Text>
+                <Text style={[styles.cardValue, { color: colors.textMain }]}>{format(joinDate, 'yyyy.MM.dd')}</Text>
+                <View style={styles.tenureContainer}>
+                  <View style={[styles.badge, { backgroundColor: currentChar.color + '22' }]}>
+                    <Text style={[styles.badgeText, { color: currentChar.color }]}>D + {daysElapsed}</Text>
+                  </View>
+                  <Text style={[styles.tenureText, { color: colors.textSub }]}>{yearsOfService}년차</Text>
                 </View>
-                <Text style={[styles.tenureText, { color: colors.textSub }]}>{yearsOfService}년차</Text>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <Text style={[styles.cardLabel, { color: colors.textSub, marginTop: 10 }]}>현재 회사 근속</Text>
+                <Text style={[styles.careerValue, { color: colors.textMain }]}>{totalTenure}</Text>
               </View>
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              <Text style={[styles.cardLabel, { color: colors.textSub, marginTop: 10 }]}>현재 회사 근속</Text>
-              <Text style={[styles.careerValue, { color: colors.textMain }]}>{totalTenure}</Text>
+              <TouchableOpacity
+                onPress={() => setIsJobModalVisible(true)}
+                style={[styles.characterCard, { backgroundColor: currentChar.secondaryColor, borderColor: currentChar.color + '40' }]}
+                activeOpacity={0.85}
+              >
+                <View style={styles.characterCircle}>
+                  <Text style={styles.characterEmoji}>{currentChar.emoji}</Text>
+                </View>
+                <View style={[styles.jobBadge, { backgroundColor: currentChar.color }]}>
+                  <Text style={styles.jobBadgeText}>{currentChar.label}</Text>
+                </View>
+              </TouchableOpacity>
             </View>
-
-            {/* 직종 캐릭터 — 터치 시 직종 변경 모달 */}
-            <TouchableOpacity
-              onPress={() => setIsJobModalVisible(true)}
-              style={[styles.characterCard, { backgroundColor: currentChar.secondaryColor, borderColor: currentChar.color + '40' }]}
-              activeOpacity={0.85}
-            >
-              <View style={styles.characterCircle}>
-                <Text style={styles.characterEmoji}>{currentChar.emoji}</Text>
+          </TouchableOpacity>
+        ) : (
+          // 미등록 — 안내 카드
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, shadowColor: colors.shadow }]}>
+            <View style={styles.cardContent}>
+              <View style={styles.cardInfo}>
+                {/* 1회성 힌트 배너 */}
+                {showJoinHint && (
+                  <TouchableOpacity
+                    style={[styles.joinHintBanner, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '40' }]}
+                    onPress={dismissJoinHint}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.joinHintTitle, { color: colors.primary }]}>⭕ 입사일을 등록해보세요</Text>
+                    <Text style={[styles.joinHintDesc, { color: colors.textSub }]}>
+                      근속일 계산 기능을 사용할 수 있어요.
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <Text style={[styles.cardLabel, { color: colors.textSub }]}>📅 입사일을 등록해보세요</Text>
+                <Text style={[styles.registerSubtext, { color: colors.textSub }]}>
+                  근속일을 자동으로 계산해드려요.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.registerBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => setDatePickerVisibility(true)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="calendar-outline" size={16} color="#fff" />
+                  <Text style={styles.registerBtnText}>입사일 등록하기</Text>
+                </TouchableOpacity>
               </View>
-              <View style={[styles.jobBadge, { backgroundColor: currentChar.color }]}>
-                <Text style={styles.jobBadgeText}>{currentChar.label}</Text>
-              </View>
-            </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setIsJobModalVisible(true)}
+                style={[styles.characterCard, { backgroundColor: currentChar.secondaryColor, borderColor: currentChar.color + '40' }]}
+                activeOpacity={0.85}
+              >
+                <View style={styles.characterCircle}>
+                  <Text style={styles.characterEmoji}>{currentChar.emoji}</Text>
+                </View>
+                <View style={[styles.jobBadge, { backgroundColor: currentChar.color }]}>
+                  <Text style={styles.jobBadgeText}>{currentChar.label}</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
-        </TouchableOpacity>
+        )}
 
         {/* 2. 오늘의 체크리스트 */}
         <View style={styles.section}>
@@ -212,15 +356,19 @@ export default function HomeScreen() {
         </View>
 
         {/* 4. 응원 카드 */}
-        <View style={[styles.encouragementCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={styles.encouragementEmoji}>🌱</Text>
+        <TouchableOpacity
+          style={[styles.encouragementCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={handleRefreshQuote}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.encouragementEmoji}>{dailyQuote.icon}</Text>
           <View style={styles.encouragementBody}>
-            <Text style={[styles.encouragementLabel, { color: colors.textSub }]}>오늘의 응원</Text>
+            <Text style={[styles.encouragementLabel, { color: colors.textSub }]}>오늘의 응원 · 탭하여 새로고침</Text>
             <Text style={[styles.encouragementText, { color: colors.textMain }]}>
-              작은 습관이 큰 변화를 만든다
+              {dailyQuote.text}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
       </ScrollView>
 
@@ -231,7 +379,9 @@ export default function HomeScreen() {
           mode="date"
           onConfirm={handleConfirmDate}
           onCancel={() => setDatePickerVisibility(false)}
-          date={joinDate}
+          date={joinDate ?? new Date()}
+          maximumDate={new Date()}
+          minimumDate={new Date(1980, 0, 1)}
         />
       )}
 
@@ -239,45 +389,130 @@ export default function HomeScreen() {
       <Modal visible={isJobModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            {/* 모달 헤더 */}
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.textMain }]}>직종 변경</Text>
-              <TouchableOpacity onPress={() => setIsJobModalVisible(false)}>
+              {modalCategoryKey ? (
+                <TouchableOpacity onPress={() => setModalCategoryKey(null)} style={styles.modalBackBtn}>
+                  <Ionicons name="chevron-back" size={20} color={colors.primary} />
+                  <Text style={[styles.modalBackText, { color: colors.primary }]}>
+                    {JOB_CATEGORIES.find(c => c.key === modalCategoryKey)?.emoji}{' '}
+                    {JOB_CATEGORIES.find(c => c.key === modalCategoryKey)?.label}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={[styles.modalTitle, { color: colors.textMain }]}>직종 변경</Text>
+              )}
+              <TouchableOpacity onPress={() => {
+                setIsJobModalVisible(false);
+                setModalCategoryKey(null);
+                setModalSearchQuery('');
+              }}>
                 <Ionicons name="close" size={24} color={colors.textMain} />
               </TouchableOpacity>
             </View>
-            <ScrollView contentContainerStyle={styles.jobGrid} showsVerticalScrollIndicator={false}>
-              {(Object.keys(JOB_CHARACTERS) as JobType[]).map((key) => {
-                const item = JOB_CHARACTERS[key];
-                const isSelected = selectedJob === key;
+
+            {/* 검색바 */}
+            <View style={[styles.modalSearchBar, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Ionicons name="search-outline" size={17} color={colors.textSub} />
+              <TextInput
+                style={[styles.modalSearchInput, { color: colors.textMain }]}
+                placeholder="직업을 검색하세요"
+                placeholderTextColor={colors.textSub}
+                value={modalSearchQuery}
+                onChangeText={text => {
+                  setModalSearchQuery(text);
+                  if (text.length > 0) setModalCategoryKey(null);
+                }}
+              />
+              {modalSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setModalSearchQuery('')}>
+                  <Ionicons name="close-circle" size={17} color={colors.textSub} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* 피커 콘텐츠 */}
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalPickerContent}>
+              {(() => {
+                const trimmed = modalSearchQuery.trim().toLowerCase();
+                const isSearching = trimmed.length > 0;
+                const currentCat = modalCategoryKey
+                  ? JOB_CATEGORIES.find(c => c.key === modalCategoryKey)
+                  : null;
+                const filteredKeys: JobType[] = isSearching
+                  ? (Object.keys(JOB_CHARACTERS) as JobType[]).filter(k =>
+                      JOB_CHARACTERS[k].label.toLowerCase().includes(trimmed)
+                    )
+                  : [];
+
+                const renderRow = (key: JobType) => {
+                  const item = JOB_CHARACTERS[key];
+                  const isSelected = selectedJob === key;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={[
+                        styles.modalJobRow,
+                        {
+                          backgroundColor: isSelected ? item.secondaryColor : colors.background,
+                          borderColor: isSelected ? item.color : colors.border,
+                        },
+                      ]}
+                      onPress={() => {
+                        updateJob(key);
+                        setIsJobModalVisible(false);
+                        setModalCategoryKey(null);
+                        setModalSearchQuery('');
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.modalJobIcon, { backgroundColor: isSelected ? '#fff' : item.secondaryColor }]}>
+                        <Text style={styles.modalJobEmoji}>{item.emoji}</Text>
+                      </View>
+                      <Text style={[styles.modalJobLabel, { color: isSelected ? item.color : colors.textMain }]}>
+                        {item.label}
+                      </Text>
+                      {isSelected && <Ionicons name="checkmark-circle" size={20} color={item.color} />}
+                    </TouchableOpacity>
+                  );
+                };
+
+                if (isSearching) {
+                  return filteredKeys.length === 0
+                    ? <Text style={[styles.modalEmpty, { color: colors.textSub }]}>검색 결과가 없습니다</Text>
+                    : <>{filteredKeys.map(renderRow)}</>;
+                }
+                if (currentCat) {
+                  return <>{currentCat.jobKeys.map(renderRow)}</>;
+                }
                 return (
-                  <TouchableOpacity
-                    key={key}
-                    onPress={() => {
-                      updateJob(key);
-                      setIsJobModalVisible(false);
-                    }}
-                    activeOpacity={0.85}
-                    style={[
-                      styles.jobItem,
-                      {
-                        backgroundColor: isSelected ? item.secondaryColor : colors.background,
-                        borderColor: isSelected ? item.color : colors.border,
-                      },
-                    ]}
-                  >
-                    <View style={[styles.jobIconCircle, { backgroundColor: isSelected ? '#fff' : item.secondaryColor }]}>
-                      <Text style={styles.jobModalEmoji}>{item.emoji}</Text>
-                    </View>
-                    <Text style={[styles.jobModalLabel, { color: isSelected ? item.color : colors.textMain }]}>
-                      {item.label}
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={styles.modalCategoryGrid}>
+                    {JOB_CATEGORIES.map(cat => (
+                      <TouchableOpacity
+                        key={cat.key}
+                        style={[styles.modalCategoryCard, { backgroundColor: colors.background, borderColor: colors.border }]}
+                        onPress={() => setModalCategoryKey(cat.key)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.modalCategoryEmoji}>{cat.emoji}</Text>
+                        <Text style={[styles.modalCategoryLabel, { color: colors.textMain }]}>{cat.label}</Text>
+                        <Ionicons name="chevron-forward" size={13} color={colors.textSub} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 );
-              })}
+              })()}
             </ScrollView>
           </View>
         </View>
       </Modal>
+
+      {/* 가입 완료 토스트 */}
+      {params.welcome === '1' && (
+        <Animated.View style={[styles.toast, { opacity: toastOpacity }]}>
+          <Text style={styles.toastText}>기본 루틴 4개가 생성되었습니다 🎉</Text>
+        </Animated.View>
+      )}
 
     </SafeAreaView>
   );
@@ -301,6 +536,31 @@ const styles = StyleSheet.create({
   characterMiniEmoji: { fontSize: 20 },
   headerActions: { flexDirection: 'row' },
   iconButton: { marginLeft: 14, padding: 5 },
+  themeHintWrapper: { position: 'relative' },
+  themeHintBubble: {
+    position: 'absolute',
+    top: 42,
+    right: -4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    zIndex: 100,
+    minWidth: 138,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  themeHintArrow: {
+    position: 'absolute',
+    top: -5,
+    right: 14,
+    width: 10,
+    height: 10,
+    transform: [{ rotate: '45deg' }],
+  },
+  themeHintText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 
   // 입사일 카드
   card: {
@@ -318,6 +578,19 @@ const styles = StyleSheet.create({
   tenureText: { fontSize: 14, fontWeight: '700' },
   divider: { height: 1, width: '100%', opacity: 0.25, marginBottom: 2 },
   careerValue: { fontSize: 18, fontWeight: '800', marginTop: 4 },
+
+  // 입사일 미등록 카드
+  registerSubtext: { fontSize: 13, fontWeight: '500', marginTop: 6, marginBottom: 16, lineHeight: 19 },
+  registerBtn: {
+    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14,
+  },
+  registerBtnText: { color: '#fff', fontSize: 13, fontWeight: '700', marginLeft: 6 },
+  joinHintBanner: {
+    borderRadius: 14, borderWidth: 1.5, padding: 12, marginBottom: 14,
+  },
+  joinHintTitle: { fontSize: 13, fontWeight: '800', marginBottom: 4 },
+  joinHintDesc: { fontSize: 12, fontWeight: '500' },
 
   // 직종 캐릭터 카드
   characterCard: {
@@ -365,21 +638,46 @@ const styles = StyleSheet.create({
 
   // 직종 모달
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, maxHeight: '78%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalContent: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 20, maxHeight: '82%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   modalTitle: { fontSize: 20, fontWeight: '800' },
-  jobGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingBottom: 20 },
-  jobItem: {
-    width: (width - 64) / 3,
-    paddingVertical: 14, paddingHorizontal: 8,
-    borderRadius: 18, borderWidth: 2, marginBottom: 10, alignItems: 'center',
+  modalBackBtn: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  modalBackText: { fontSize: 15, fontWeight: '700', marginLeft: 4 },
+  modalSearchBar: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderRadius: 14, borderWidth: 1.5, marginBottom: 12,
   },
-  jobIconCircle: {
-    width: 54, height: 54, borderRadius: 27,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
+  modalSearchInput: { flex: 1, fontSize: 14, fontWeight: '500', marginLeft: 7, marginRight: 4 },
+  modalPickerContent: { paddingBottom: 20 },
+  modalCategoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  modalCategoryCard: {
+    width: '48%', flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 12,
+    borderRadius: 14, borderWidth: 1.5, marginBottom: 9,
   },
-  jobModalEmoji: { fontSize: 28 },
-  jobModalLabel: { fontSize: 11, fontWeight: '800', textAlign: 'center' },
+  modalCategoryEmoji: { fontSize: 18, marginRight: 7 },
+  modalCategoryLabel: { flex: 1, fontSize: 12, fontWeight: '700' },
+  modalJobRow: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 12, borderRadius: 14, borderWidth: 1.5, marginBottom: 7,
+  },
+  modalJobIcon: {
+    width: 38, height: 38, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center', marginRight: 10,
+  },
+  modalJobEmoji: { fontSize: 20 },
+  modalJobLabel: { flex: 1, fontSize: 13, fontWeight: '700' },
+  modalEmpty: { textAlign: 'center', paddingVertical: 20, fontSize: 14 },
+
+  // 토스트
+  toast: {
+    position: 'absolute', bottom: 100, alignSelf: 'center',
+    backgroundColor: 'rgba(30,30,30,0.88)',
+    paddingHorizontal: 20, paddingVertical: 12,
+    borderRadius: 24, zIndex: 999,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2, shadowRadius: 8, elevation: 8,
+  },
+  toastText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });
