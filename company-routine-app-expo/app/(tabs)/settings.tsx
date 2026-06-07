@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../_layout';
-import { JOB_CHARACTERS } from '@/constants/jobs';
+import { TOUR_SEEN_KEY } from '@/components/TourOverlay';
 
 type ThemeMode = 'light' | 'dark' | 'pink' | 'blue' | 'green' | 'yellow';
 
@@ -54,7 +54,7 @@ const ThemeOption = ({
 const THEME_STORAGE_KEY = '@theme_preference';
 
 export default function SettingsScreen() {
-  const { theme, setTheme, colors, selectedJob, userProfile } = useAppTheme();
+  const { theme, setTheme, colors, userProfile, startTour, resetPlans } = useAppTheme();
   const router = useRouter();
 
   const handleResetTheme = () => {
@@ -70,21 +70,20 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleResetPlans = () => {
+    Alert.alert(
+      '모든 계획 기록을 초기화할까요?',
+      '체크 기록과 날짜별 계획이 모두 삭제됩니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '초기화', style: 'destructive', onPress: () => resetPlans() },
+      ],
+    );
+  };
+
   const handleAction = (label: string) => {
     Alert.alert('준비 중', `${label} 기능은 다음 업데이트에 포함될 예정입니다.`);
   };
-
-  const handleChangeJob = () => {
-    Alert.alert('직종 변경', '직종 선택 화면으로 이동하시겠습니까?', [
-      { text: '취소', style: 'cancel' },
-      { text: '이동', onPress: () => router.push('/onboarding') },
-    ]);
-  };
-
-  const currentJobLabel =
-    selectedJob && JOB_CHARACTERS[selectedJob] ? JOB_CHARACTERS[selectedJob].label : '미설정';
-  const currentJobEmoji =
-    selectedJob && JOB_CHARACTERS[selectedJob] ? JOB_CHARACTERS[selectedJob].emoji : '❓';
 
   const SettingItem = ({
     icon,
@@ -192,13 +191,6 @@ export default function SettingsScreen() {
         {/* 개인화 */}
         <Text style={[styles.sectionTitle, { color: colors.textSub, marginTop: 28 }]}>개인화</Text>
         <SettingItem
-          icon="briefcase-outline"
-          label="나의 직종"
-          valueEmoji={currentJobEmoji}
-          value={currentJobLabel}
-          onPress={handleChangeJob}
-        />
-        <SettingItem
           icon="person-outline"
           label="내 정보 수정"
           value={userProfile?.nickname}
@@ -207,6 +199,15 @@ export default function SettingsScreen() {
 
         {/* 앱 설정 */}
         <Text style={[styles.sectionTitle, { color: colors.textSub, marginTop: 28 }]}>앱 설정</Text>
+        <SettingItem
+          icon="compass-outline"
+          label="앱 사용법 다시 보기"
+          onPress={async () => {
+            await AsyncStorage.removeItem(TOUR_SEEN_KEY);
+            router.navigate('/(tabs)');
+            setTimeout(() => startTour(), 400);
+          }}
+        />
         <SettingItem
           icon="notifications-outline"
           label="알림 설정"
@@ -222,6 +223,17 @@ export default function SettingsScreen() {
           label="고객 지원"
           onPress={() => handleAction('고객 지원')}
         />
+
+        {/* 데이터 관리 */}
+        <Text style={[styles.sectionTitle, { color: colors.textSub, marginTop: 28 }]}>데이터 관리</Text>
+        <TouchableOpacity
+          style={[styles.dangerButton, { borderColor: '#FF3B30' + '40', backgroundColor: '#FF3B30' + '08' }]}
+          onPress={handleResetPlans}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+          <Text style={[styles.dangerButtonText, { color: '#FF3B30' }]}>계획 초기화하기</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.logoutButton}
@@ -274,7 +286,12 @@ const styles = StyleSheet.create({
   itemRight: { flexDirection: 'row', alignItems: 'center' },
   valueEmoji: { fontSize: 16, marginRight: 4 },
   itemValue: { fontSize: 14, marginRight: 6 },
-  logoutButton: { marginTop: 36, alignItems: 'center', padding: 15 },
+  dangerButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, padding: 15, borderRadius: 18, borderWidth: 1.5, marginBottom: 4,
+  },
+  dangerButtonText: { fontSize: 15, fontWeight: '700' },
+  logoutButton: { marginTop: 28, alignItems: 'center', padding: 15 },
   logoutText: { color: '#FF3B30', fontSize: 16, fontWeight: '700' },
   version: { textAlign: 'center', marginTop: 16, fontSize: 12, fontWeight: '500' },
 });

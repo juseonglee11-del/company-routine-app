@@ -1,74 +1,224 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  SafeAreaView,
-  TextInput,
+  Alert,
   KeyboardAvoidingView,
   Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { format } from 'date-fns';
-import { useAppTheme } from '../_layout';
+import { useAppTheme, isRoutineActiveOnDate, RepeatType } from '../_layout';
 
-// Calendar Locale Configuration
+// ── Calendar locale ───────────────────────────────────────────────
 LocaleConfig.locales['ko'] = {
-  monthNames: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'],
-  monthNamesShort: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'],
-  dayNames: ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'],
-  dayNamesShort: ['일', '월', '화', '수', '목', '금', '토'],
-  today: '오늘'
+  monthNames: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+  monthNamesShort: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+  dayNames: ['일요일','월요일','화요일','수요일','목요일','금요일','토요일'],
+  dayNamesShort: ['일','월','화','수','목','금','토'],
+  today: '오늘',
 };
 LocaleConfig.defaultLocale = 'ko';
 
+// ── Constants ─────────────────────────────────────────────────────
+const REPEAT_OPTIONS: { key: RepeatType; label: string }[] = [
+  { key: 'daily',   label: '매일' },
+  { key: 'weekday', label: '평일' },
+  { key: 'weekend', label: '주말' },
+  { key: 'custom',  label: '요일 선택' },
+];
+
+const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+
+const getRepeatLabel = (repeat: RepeatType, days?: number[]): string => {
+  if (repeat === 'daily')   return '매일';
+  if (repeat === 'weekday') return '평일';
+  if (repeat === 'weekend') return '주말';
+  if (repeat === 'custom' && days && days.length > 0) {
+    return days.map(d => DAY_LABELS[d]).join('·');
+  }
+  return '요일 선택';
+};
+
+// ── Screen ────────────────────────────────────────────────────────
 export default function RoutineScreen() {
-  const { colors, routines, addRoutine, deleteRoutine, completionData, toggleRoutineCompletion } = useAppTheme();
+  const {
+    colors, routines,
+    addRoutine, addRoutinesBulk, deleteRoutine,
+    completionData, toggleRoutineCompletion,
+    registerTourTarget,
+  } = useAppTheme();
+
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const [selectedDate, setSelectedDate] = useState(todayStr);
-  const [newRoutine, setNewRoutine] = useState('');
 
-  const handleAddRoutine = () => {
-    if (newRoutine.trim()) {
-      addRoutine(newRoutine);
-      setNewRoutine('');
-    }
-  };
+  // Add-form state
+  const [newTask, setNewTask]     = useState('');
+  const [repeat, setRepeat]       = useState<RepeatType>('daily');
+  const [customDays, setCustomDays] = useState<number[]>([1, 2, 3, 4, 5]);
 
+  // Tour refs
+  const calendarRef   = useRef<View>(null);
+  const dateRecordRef = useRef<View>(null);
+  const addRef        = useRef<View>(null);
+
+  useEffect(() => {
+    registerTourTarget('routineCalendar',   calendarRef   as React.RefObject<View>);
+    registerTourTarget('routineDateRecord', dateRecordRef as React.RefObject<View>);
+    registerTourTarget('routineAdd',        addRef        as React.RefObject<View>);
+  }, []);
+
+  const isEditable = true; // 과거/오늘/미래 모든 날짜 편집 가능
+
+  // ── Derived data ───────────────────────────────────────────────
+  const activeRoutines = useMemo(
+    () => routines.filter(r => isRoutineActiveOnDate(r, selectedDate)),
+    [routines, selectedDate],
+  );
+
+  const completedIds   = completionData[selectedDate] ?? [];
+  const completedCount = completedIds.filter(id => activeRoutines.some(r => r.id === id)).length;
+  const progress = activeRoutines.length > 0
+    ? (completedCount / activeRoutines.length) * 100
+    : 0;
+
+  // Calendar marks: 모든 계획을 완료한 날짜에만 빨간 반투명 원 표시
   const markedDates = useMemo(() => {
     const marks: any = {};
+
     Object.keys(completionData).forEach(date => {
-      const completedIds = completionData[date];
-      if (completedIds.length > 0) {
-        marks[date] = { marked: true, dotColor: colors.primary };
-      }
+      const doneIds    = completionData[date] ?? [];
+      if (doneIds.length === 0) return;
+
+      const dayRoutines = routines.filter(r => isRoutineActiveOnDate(r, date));
+      if (dayRoutines.length === 0) return; // 계획 없는 날은 표시 안 함
+
+      const allDone = dayRoutines.every(r => doneIds.includes(r.id));
+      if (!allDone) return; // 일부만 완료 → 표시 안 함
+
+      marks[date] = {
+        customStyles: {
+          container: {
+            backgroundColor: 'rgba(255, 59, 48, 0.22)',
+            borderRadius: 16,
+          },
+          text: { color: colors.textMain, fontWeight: '800' },
+        },
+      };
     });
+
+    // 선택된 날짜: 기존 customStyles 위에 selected 스타일 덮어쓰기
     marks[selectedDate] = {
       ...marks[selectedDate],
       selected: true,
       selectedColor: colors.primary,
       selectedTextColor: '#FFFFFF',
     };
+
     return marks;
-  }, [completionData, selectedDate, colors]);
+  }, [completionData, routines, selectedDate, colors]);
 
-  const currentCompleted = completionData[selectedDate] || [];
-  const progress = routines.length > 0 ? (currentCompleted.length / routines.length) * 100 : 0;
+  // ── Handlers ──────────────────────────────────────────────────
+  const handleAdd = () => {
+    if (!newTask.trim()) return;
+    addRoutine(
+      newTask.trim(),
+      repeat,
+      repeat === 'custom' ? customDays : undefined,
+      selectedDate,          // 선택한 날짜부터 시작
+    );
+    setNewTask('');
+    setRepeat('daily');
+    setCustomDays([1, 2, 3, 4, 5]);
+  };
 
+  const handleDelete = (id: number) => {
+    // 선택한 날짜에서만 제거, 다른 날짜는 그대로
+    deleteRoutine(id, selectedDate);
+  };
+
+  const toggleDay = (dow: number) =>
+    setCustomDays(prev =>
+      prev.includes(dow) ? prev.filter(d => d !== dow) : [...prev, dow].sort(),
+    );
+
+  // 최근 계획 불러오기: 항상 오늘 날짜의 계획을 기준으로 복사
+  const handleCopyFromRecent = () => {
+    if (selectedDate === todayStr) {
+      Alert.alert('알림', '오늘 날짜는 불러올 수 없습니다.');
+      return;
+    }
+
+    const todayRoutines = routines.filter(r => isRoutineActiveOnDate(r, todayStr));
+    if (todayRoutines.length === 0) {
+      Alert.alert('불러올 계획 없음', '오늘 등록된 계획이 없습니다.');
+      return;
+    }
+
+    // selectedDate 하루에만 표시되도록 endDate = 다음 날로 고정
+    // repeat은 'daily'로 강제해서 요일 조건 없이 반드시 selectedDate에 표시
+    const nextDay = new Date(selectedDate + 'T00:00:00');
+    nextDay.setDate(nextDay.getDate() + 1);
+    const endDate = format(nextDay, 'yyyy-MM-dd');
+
+    const items = todayRoutines.map(r => ({
+      task: r.task,
+      repeat: 'daily' as const,
+      startDate: selectedDate,
+      endDate,
+    }));
+
+    const doCopy = () => addRoutinesBulk(items);
+
+    if (activeRoutines.length > 0) {
+      Alert.alert(
+        '기존 계획이 있습니다',
+        `이 날짜에 이미 계획이 있습니다.\n오늘 계획을 추가로 불러올까요?`,
+        [
+          { text: '취소', style: 'cancel' },
+          { text: '불러오기', onPress: doCopy },
+        ],
+      );
+    } else {
+      doCopy();
+    }
+  };
+
+  // ── Labels ────────────────────────────────────────────────────
+  const dateLabel = (() => {
+    if (selectedDate === todayStr) return '오늘의 계획';
+    const d = new Date(selectedDate + 'T00:00:00');
+    return `${format(d, 'M월 d일')} 계획`;
+  })();
+
+  // ── Render ────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          
-          <Text style={[styles.title, { color: colors.textMain }]}>루틴 달력</Text>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={[styles.title, { color: colors.textMain }]}>계획</Text>
 
-          {/* Calendar Card */}
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 0, overflow: 'hidden' }]}>
+          {/* ── 달력 ──────────────────────────────────────────── */}
+          <View
+            ref={calendarRef}
+            style={[styles.calendarCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
             <Calendar
-              onDayPress={(day) => setSelectedDate(day.dateString)}
+              onDayPress={day => setSelectedDate(day.dateString)}
+              markingType="custom"
               markedDates={markedDates}
               theme={{
                 backgroundColor: colors.card,
@@ -83,7 +233,6 @@ export default function RoutineScreen() {
                 selectedDotColor: '#FFFFFF',
                 arrowColor: colors.primary,
                 monthTextColor: colors.textMain,
-                indicatorColor: colors.primary,
                 textDayFontWeight: '500',
                 textMonthFontWeight: 'bold',
                 textDayHeaderFontWeight: 'bold',
@@ -91,65 +240,192 @@ export default function RoutineScreen() {
             />
           </View>
 
-          {/* Progress Section */}
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.textMain }]}>
-              {selectedDate === todayStr ? '오늘의 루틴' : `${format(new Date(selectedDate), 'M월 d일')} 루틴`}
-            </Text>
-            <View style={[styles.progressBadge, { backgroundColor: colors.primary + '20' }]}>
-              <Text style={[styles.progressText, { color: colors.primary }]}>{Math.round(progress)}% 완료</Text>
-            </View>
-          </View>
-
-          {/* Progress Bar */}
-          <View style={[styles.progressBarBg, { backgroundColor: colors.border + '50' }]}>
-            <View style={[styles.progressBarFill, { backgroundColor: colors.primary, width: `${progress}%` }]} />
-          </View>
-
-          {/* Routine List */}
-          {routines.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[
-                styles.routineItem,
-                { backgroundColor: colors.card, borderColor: currentCompleted.includes(item.id) ? 'transparent' : colors.border },
-                currentCompleted.includes(item.id) && { opacity: 0.6 }
-              ]}
-              onPress={() => toggleRoutineCompletion(selectedDate, item.id)}
-            >
-              <View style={styles.routineLeft}>
-                <Ionicons
-                  name={currentCompleted.includes(item.id) ? "checkbox" : "square-outline"}
-                  size={24}
-                  color={currentCompleted.includes(item.id) ? colors.primary : colors.textSub}
-                />
-                <Text style={[
-                  styles.routineText,
-                  { color: colors.textMain },
-                  currentCompleted.includes(item.id) && { textDecorationLine: 'line-through', color: colors.textSub }
-                ]}>
-                  {item.task}
-                </Text>
+          {/* ── 날짜별 계획 & 기록 ────────────────────────────── */}
+          <View ref={dateRecordRef}>
+            {/* Header */}
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={[styles.sectionTitle, { color: colors.textMain }]}>{dateLabel}</Text>
               </View>
-              <TouchableOpacity onPress={() => deleteRoutine(item.id)}>
-                <Ionicons name="trash-outline" size={18} color={colors.textSub} />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ))}
+              <View style={styles.badgeGroup}>
+                <View style={[styles.badge, { backgroundColor: colors.primary + '1E' }]}>
+                  <Text style={[styles.badgeText, { color: colors.primary }]}>
+                    {completedCount}/{activeRoutines.length}
+                  </Text>
+                </View>
+                {activeRoutines.length > 0 && (
+                  <View style={[styles.badge, { backgroundColor: colors.primary + '14', marginLeft: 6 }]}>
+                    <Text style={[styles.badgeText, { color: colors.primary }]}>
+                      {Math.round(progress)}%
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
 
-          {/* Add Routine */}
-          <View style={styles.inputRow}>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.textMain }]}
-              placeholder="새로운 루틴 추가..."
-              placeholderTextColor={colors.textSub}
-              value={newRoutine}
-              onChangeText={setNewRoutine}
-            />
-            <TouchableOpacity style={[styles.addButton, { backgroundColor: colors.primary }]} onPress={handleAddRoutine}>
-              <Ionicons name="add" size={28} color="#FFFFFF" />
-            </TouchableOpacity>
+            {/* Progress bar */}
+            <View style={[styles.progressBg, { backgroundColor: colors.border + '60' }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { backgroundColor: colors.primary, width: `${progress}%` as any },
+                ]}
+              />
+            </View>
+
+            {/* Plan list */}
+            {activeRoutines.length === 0 ? (
+              <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Ionicons name="calendar-outline" size={28} color={colors.textSub} />
+                <Text style={[styles.emptyText, { color: colors.textSub }]}>
+                  이 날에는 등록된 계획이 없어요
+                </Text>
+                {/* 최근 계획 불러오기 — 편집 가능한 날만 */}
+                {isEditable && (
+                  <TouchableOpacity
+                    style={[styles.copyBtn, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '50' }]}
+                    onPress={handleCopyFromRecent}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="copy-outline" size={15} color={colors.primary} />
+                    <Text style={[styles.copyBtnText, { color: colors.primary }]}>최근 계획 불러오기</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              activeRoutines.map(r => {
+                const done = completedIds.includes(r.id);
+                return (
+                  <TouchableOpacity
+                    key={r.id}
+                    style={[
+                      styles.routineRow,
+                      { backgroundColor: colors.card, borderColor: done ? 'transparent' : colors.border },
+                      done && { opacity: 0.7 },
+                    ]}
+                    onPress={() => toggleRoutineCompletion(selectedDate, r.id)}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons
+                      name={done ? 'checkbox' : 'square-outline'}
+                      size={22}
+                      color={done ? colors.primary : colors.textSub}
+                    />
+                    <Text
+                      style={[
+                        styles.routineText,
+                        { color: colors.textMain },
+                        done && { textDecorationLine: 'line-through', color: colors.textSub },
+                      ]}
+                    >
+                      {r.task}
+                    </Text>
+
+                    <View style={[styles.repeatBadge, { backgroundColor: colors.primary + '16' }]}>
+                      <Text style={[styles.repeatBadgeText, { color: colors.primary }]}>
+                        {getRepeatLabel(r.repeat, r.days)}
+                      </Text>
+                    </View>
+
+                    {/* 삭제 버튼 — 편집 가능한 날만 */}
+                    {isEditable && (
+                      <TouchableOpacity
+                        onPress={() => handleDelete(r.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={{ marginLeft: 6 }}
+                      >
+                        <Ionicons name="trash-outline" size={16} color={colors.textSub} />
+                      </TouchableOpacity>
+                    )}
+                  </TouchableOpacity>
+                );
+              })
+            )}
           </View>
+
+          {/* ── 계획 추가 (오늘 + 미래만) ────────────────────── */}
+          {isEditable && (
+            <View
+              ref={addRef}
+              style={[styles.addSection, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
+              <Text style={[styles.addTitle, { color: colors.textMain }]}>계획 추가</Text>
+
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textMain }]}
+                placeholder="새 계획 내용을 입력하세요"
+                placeholderTextColor={colors.textSub}
+                value={newTask}
+                onChangeText={setNewTask}
+                returnKeyType="done"
+                onSubmitEditing={handleAdd}
+              />
+
+              {/* 반복 설정 */}
+              <Text style={[styles.repeatLabel, { color: colors.textSub }]}>반복 설정</Text>
+              <View style={styles.repeatRow}>
+                {REPEAT_OPTIONS.map(opt => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[
+                      styles.repeatChip,
+                      { borderColor: repeat === opt.key ? colors.primary : colors.border },
+                      repeat === opt.key && { backgroundColor: colors.primary + '18' },
+                    ]}
+                    onPress={() => setRepeat(opt.key)}
+                  >
+                    <Text
+                      style={[
+                        styles.repeatChipText,
+                        { color: repeat === opt.key ? colors.primary : colors.textSub },
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* 요일 선택 */}
+              {repeat === 'custom' && (
+                <View style={styles.dayRow}>
+                  {DAY_LABELS.map((label, dow) => {
+                    const sel = customDays.includes(dow);
+                    return (
+                      <TouchableOpacity
+                        key={dow}
+                        style={[
+                          styles.dayChip,
+                          {
+                            backgroundColor: sel ? colors.primary : colors.background,
+                            borderColor: sel ? colors.primary : colors.border,
+                          },
+                        ]}
+                        onPress={() => toggleDay(dow)}
+                      >
+                        <Text style={[styles.dayChipText, { color: sel ? '#fff' : colors.textSub }]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.addBtn,
+                  { backgroundColor: newTask.trim() ? colors.primary : colors.border },
+                ]}
+                onPress={handleAdd}
+                disabled={!newTask.trim()}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add" size={20} color="#fff" />
+                <Text style={styles.addBtnText}>추가하기</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
         </ScrollView>
       </KeyboardAvoidingView>
@@ -157,29 +433,81 @@ export default function RoutineScreen() {
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 140 },
+  safe: { flex: 1 },
+  scroll: { padding: 20, paddingBottom: 140 },
   title: { fontSize: 24, fontWeight: '800', marginBottom: 20 },
-  card: { borderRadius: 20, borderWidth: 1, marginBottom: 24, padding: 16 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: '700' },
-  progressBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-  progressText: { fontSize: 13, fontWeight: '800' },
-  progressBarBg: { height: 8, borderRadius: 4, marginBottom: 20, overflow: 'hidden' },
-  progressBarFill: { height: '100%', borderRadius: 4 },
-  routineItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderRadius: 15,
-    borderWidth: 1,
-    marginBottom: 10,
+
+  calendarCard: {
+    borderRadius: 20, borderWidth: 1,
+    overflow: 'hidden', marginBottom: 24,
   },
-  routineLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  routineText: { fontSize: 15, fontWeight: '600', marginLeft: 12 },
-  inputRow: { flexDirection: 'row', marginTop: 10 },
-  input: { flex: 1, height: 50, borderRadius: 15, borderWidth: 1, paddingHorizontal: 16, marginRight: 10 },
-  addButton: { width: 50, height: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+
+  sectionHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'flex-start', marginBottom: 10,
+  },
+  sectionTitle: { fontSize: 17, fontWeight: '800' },
+  sectionSub:   { fontSize: 11, fontWeight: '600', marginTop: 2 },
+  badgeGroup:   { flexDirection: 'row', alignItems: 'center' },
+  badge:        { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  badgeText:    { fontSize: 12, fontWeight: '800' },
+
+  progressBg:   { height: 8, borderRadius: 4, marginBottom: 14, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 4 },
+
+  emptyCard: {
+    borderRadius: 18, borderWidth: 1,
+    padding: 28, alignItems: 'center', gap: 10,
+    marginBottom: 16,
+  },
+  emptyText: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
+
+  copyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderWidth: 1.5, borderRadius: 14,
+    paddingHorizontal: 16, paddingVertical: 10,
+    marginTop: 4,
+  },
+  copyBtnText: { fontSize: 13, fontWeight: '700' },
+
+  routineRow: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 14, borderRadius: 16, borderWidth: 1,
+    marginBottom: 8,
+  },
+  routineText:    { flex: 1, fontSize: 15, fontWeight: '600', marginLeft: 10 },
+  repeatBadge:    { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginLeft: 6 },
+  repeatBadgeText:{ fontSize: 10, fontWeight: '800' },
+
+  addSection: {
+    borderRadius: 22, borderWidth: 1,
+    padding: 18, marginTop: 8,
+  },
+  addTitle: { fontSize: 15, fontWeight: '800', marginBottom: 12 },
+  input: {
+    borderWidth: 1.5, borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 15, fontWeight: '500', marginBottom: 14,
+  },
+  repeatLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  repeatRow:   { flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' },
+  repeatChip: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 12, borderWidth: 1.5,
+  },
+  repeatChipText: { fontSize: 13, fontWeight: '700' },
+  dayRow:    { flexDirection: 'row', gap: 6, marginBottom: 14, flexWrap: 'wrap' },
+  dayChip: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  dayChipText: { fontSize: 13, fontWeight: '700' },
+  addBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    height: 50, borderRadius: 16, gap: 6,
+  },
+  addBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });

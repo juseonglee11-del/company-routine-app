@@ -49,7 +49,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="routine"
         options={{
-          title: '루틴',
+          title: '계획',
           tabBarIcon: ({ color }) => <Ionicons size={24} name="checkbox" color={color} />,
         }}
       />

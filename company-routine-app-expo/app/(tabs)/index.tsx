@@ -17,13 +17,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { format, differenceInDays, differenceInYears } from 'date-fns';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAppTheme } from '../_layout';
+import { useAppTheme, isRoutineActiveOnDate } from '../_layout';
 import { JOB_CHARACTERS, JOB_CATEGORIES, JOIN_DATE_KEY, JobType } from '@/constants/jobs';
 import { Quote, getRandomQuote } from '@/constants/quotes';
+import { TOUR_SEEN_KEY } from '@/components/TourOverlay';
 
 const { width } = Dimensions.get('window');
 const THEME_HINT_KEY = '@theme_hint_dismissed';
-const JOIN_DATE_HINT_KEY = '@join_date_hint_dismissed';
 const DAILY_QUOTE_KEY = '@daily_quote';
 
 export default function HomeScreen() {
@@ -38,18 +38,29 @@ export default function HomeScreen() {
     completionData,
     toggleRoutineCompletion,
     isLoaded,
+    registerTourTarget,
+    startTour,
   } = useAppTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ welcome?: string }>();
   const toastOpacity = useRef(new Animated.Value(0)).current;
+  const joinDateRef = useRef<View>(null);
+  const checklistRef = useRef<View>(null);
+  const themeButtonRef = useRef<View>(null);
   const [joinDate, setJoinDate] = useState<Date | null>(null);
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [isJobModalVisible, setIsJobModalVisible] = useState(false);
   const [modalCategoryKey, setModalCategoryKey] = useState<string | null>(null);
   const [modalSearchQuery, setModalSearchQuery] = useState('');
   const [showThemeHint, setShowThemeHint] = useState(false);
-  const [showJoinHint, setShowJoinHint] = useState(false);
   const [dailyQuote, setDailyQuote] = useState<Quote>({ text: '작은 습관이 큰 변화를 만듭니다', icon: '🌱' });
+
+  // Register tour target refs once on mount
+  useEffect(() => {
+    registerTourTarget('joinDate', joinDateRef as React.RefObject<View>);
+    registerTourTarget('checklist', checklistRef as React.RefObject<View>);
+    registerTourTarget('themeButton', themeButtonRef as React.RefObject<View>);
+  }, []);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -58,15 +69,16 @@ export default function HomeScreen() {
     } else {
       loadJoinDate();
       loadDailyQuote();
+      // Start tour automatically on first launch
+      AsyncStorage.getItem(TOUR_SEEN_KEY).then(seen => {
+        if (!seen) startTour();
+      });
     }
   }, [userProfile, selectedJob, isLoaded]);
 
   useEffect(() => {
     AsyncStorage.getItem(THEME_HINT_KEY).then(val => {
       if (val === null) setShowThemeHint(true);
-    });
-    AsyncStorage.getItem(JOIN_DATE_HINT_KEY).then(val => {
-      if (val === null) setShowJoinHint(true);
     });
   }, []);
 
@@ -104,33 +116,21 @@ export default function HomeScreen() {
     await AsyncStorage.setItem(DAILY_QUOTE_KEY, JSON.stringify({ date: today, ...quote }));
   };
 
-  const handleRefreshQuote = async () => {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const quote = getRandomQuote(dailyQuote.text);
-    setDailyQuote(quote);
-    await AsyncStorage.setItem(DAILY_QUOTE_KEY, JSON.stringify({ date: today, ...quote }));
-  };
-
   const loadJoinDate = async () => {
     const saved = await AsyncStorage.getItem(JOIN_DATE_KEY);
     if (saved) setJoinDate(new Date(saved));
-  };
-
-  const dismissJoinHint = async () => {
-    setShowJoinHint(false);
-    await AsyncStorage.setItem(JOIN_DATE_HINT_KEY, 'true');
   };
 
   const handleConfirmDate = async (date: Date) => {
     setJoinDate(date);
     setDatePickerVisibility(false);
     await AsyncStorage.setItem(JOIN_DATE_KEY, date.toISOString());
-    if (showJoinHint) await dismissJoinHint();
   };
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const todayCompletedCount = (completionData[todayStr] || []).length;
-  const totalRoutinesCount = routines.length;
+  const todayRoutines = routines.filter(r => isRoutineActiveOnDate(r, todayStr));
+  const totalRoutinesCount = todayRoutines.length;
+  const todayCompletedCount = (completionData[todayStr] || []).filter(id => todayRoutines.some(r => r.id === id)).length;
   const todayProgress = totalRoutinesCount > 0 ? (todayCompletedCount / totalRoutinesCount) * 100 : 0;
 
   if (!isLoaded || !userProfile || !selectedJob || !JOB_CHARACTERS[selectedJob]) return null;
@@ -165,6 +165,7 @@ export default function HomeScreen() {
           <View style={styles.headerActions}>
             <View style={styles.themeHintWrapper}>
               <TouchableOpacity
+                ref={themeButtonRef}
                 onPress={handleToggleTheme}
                 style={[
                   styles.iconButton,
@@ -205,6 +206,7 @@ export default function HomeScreen() {
         {joinDate ? (
           // 등록 완료 — 근속 정보 카드
           <TouchableOpacity
+            ref={joinDateRef}
             style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, shadowColor: colors.shadow }]}
             onPress={() => setDatePickerVisibility(true)}
             activeOpacity={0.9}
@@ -239,22 +241,12 @@ export default function HomeScreen() {
           </TouchableOpacity>
         ) : (
           // 미등록 — 안내 카드
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, shadowColor: colors.shadow }]}>
+          <View
+            ref={joinDateRef}
+            style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, shadowColor: colors.shadow }]}
+          >
             <View style={styles.cardContent}>
               <View style={styles.cardInfo}>
-                {/* 1회성 힌트 배너 */}
-                {showJoinHint && (
-                  <TouchableOpacity
-                    style={[styles.joinHintBanner, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '40' }]}
-                    onPress={dismissJoinHint}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.joinHintTitle, { color: colors.primary }]}>⭕ 입사일을 등록해보세요</Text>
-                    <Text style={[styles.joinHintDesc, { color: colors.textSub }]}>
-                      근속일 계산 기능을 사용할 수 있어요.
-                    </Text>
-                  </TouchableOpacity>
-                )}
                 <Text style={[styles.cardLabel, { color: colors.textSub }]}>📅 입사일을 등록해보세요</Text>
                 <Text style={[styles.registerSubtext, { color: colors.textSub }]}>
                   근속일을 자동으로 계산해드려요.
@@ -285,7 +277,7 @@ export default function HomeScreen() {
         )}
 
         {/* 2. 오늘의 체크리스트 */}
-        <View style={styles.section}>
+        <View ref={checklistRef} style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.textMain }]}>오늘의 체크리스트 📝</Text>
             <Text style={[styles.countBadge, { color: colors.primary }]}>
@@ -293,8 +285,8 @@ export default function HomeScreen() {
             </Text>
           </View>
           <View style={[styles.routineListCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {routines.length > 0 ? (
-              routines.map((item) => {
+            {todayRoutines.length > 0 ? (
+              todayRoutines.map((item) => {
                 const isCompleted = (completionData[todayStr] || []).includes(item.id);
                 return (
                   <TouchableOpacity
@@ -356,19 +348,17 @@ export default function HomeScreen() {
         </View>
 
         {/* 4. 응원 카드 */}
-        <TouchableOpacity
+        <View
           style={[styles.encouragementCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={handleRefreshQuote}
-          activeOpacity={0.8}
         >
           <Text style={styles.encouragementEmoji}>{dailyQuote.icon}</Text>
           <View style={styles.encouragementBody}>
-            <Text style={[styles.encouragementLabel, { color: colors.textSub }]}>오늘의 응원 · 탭하여 새로고침</Text>
+            <Text style={[styles.encouragementLabel, { color: colors.textSub }]}>오늘의 응원</Text>
             <Text style={[styles.encouragementText, { color: colors.textMain }]}>
               {dailyQuote.text}
             </Text>
           </View>
-        </TouchableOpacity>
+        </View>
 
       </ScrollView>
 
@@ -586,11 +576,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14,
   },
   registerBtnText: { color: '#fff', fontSize: 13, fontWeight: '700', marginLeft: 6 },
-  joinHintBanner: {
-    borderRadius: 14, borderWidth: 1.5, padding: 12, marginBottom: 14,
-  },
-  joinHintTitle: { fontSize: 13, fontWeight: '800', marginBottom: 4 },
-  joinHintDesc: { fontSize: 12, fontWeight: '500' },
 
   // 직종 캐릭터 카드
   characterCard: {

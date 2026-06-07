@@ -1,12 +1,15 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { View } from 'react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationProvider, Theme } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
+import { format, addDays } from 'date-fns';
 import { THEME_COLORS } from '@/constants/theme';
 import { JOB_STORAGE_KEY, JOIN_DATE_KEY, JobType } from '@/constants/jobs';
+import TourOverlay, { TOUR_STEP_COUNT, TOUR_SEEN_KEY } from '@/components/TourOverlay';
 
 const PinkTheme: Theme = {
   ...DefaultTheme,
@@ -73,13 +76,42 @@ export interface UserProfile {
   nickname: string;
   gender: string;
   age: string;
-  birthdate?: string; // ISO string, optional for backward compat
+  birthdate?: string;
 }
 
-interface Routine {
+export type RepeatType = 'daily' | 'weekday' | 'weekend' | 'custom';
+
+export interface Routine {
   id: number;
   task: string;
+  repeat: RepeatType;
+  days?: number[];     // 0=일, 1=월…6=토 (custom 전용)
+  startDate: string;   // yyyy-MM-dd, 이 날부터 활성
+  endDate?: string;    // yyyy-MM-dd (exclusive), 이 날부터 완전 비활성
+  skipDates?: string[];// 특정 날짜만 건너뜀 (해당 날 삭제 시 사용)
 }
+
+/** 특정 날짜에 루틴이 활성인지 판단 */
+export const isRoutineActiveOnDate = (r: Routine, dateStr: string): boolean => {
+  if (dateStr < r.startDate) return false;
+  if (r.endDate && dateStr >= r.endDate) return false;
+  if (r.skipDates?.includes(dateStr)) return false;
+  const dow = new Date(dateStr + 'T00:00:00').getDay();
+  if (r.repeat === 'weekday') return dow >= 1 && dow <= 5;
+  if (r.repeat === 'weekend') return dow === 0 || dow === 6;
+  if (r.repeat === 'custom')  return (r.days ?? []).includes(dow);
+  return true; // 'daily'
+};
+
+const migrateRoutine = (r: any): Routine => ({
+  id: r.id,
+  task: r.task,
+  repeat: r.repeat ?? 'daily',
+  days: r.days,
+  startDate: r.startDate ?? '2020-01-01',
+  endDate: r.endDate,
+  skipDates: r.skipDates,
+});
 
 interface AppContextType {
   theme: ThemeMode;
@@ -94,14 +126,25 @@ interface AppContextType {
   updateJob: (job: JobType) => Promise<void>;
 
   routines: Routine[];
-  addRoutine: (task: string) => Promise<void>;
-  deleteRoutine: (id: number) => Promise<void>;
+  addRoutine: (task: string, repeat?: RepeatType, days?: number[], startDate?: string) => Promise<void>;
+  addRoutinesBulk: (items: Array<{ task: string; repeat: RepeatType; days?: number[]; startDate: string; endDate?: string }>) => Promise<void>;
+  deleteRoutine: (id: number, specificDate?: string) => Promise<void>;
   initDefaultRoutines: () => Promise<void>;
 
   completionData: { [key: string]: number[] };
   toggleRoutineCompletion: (date: string, id: number) => Promise<void>;
+  resetPlans: () => Promise<void>;
 
   isLoaded: boolean;
+
+  // ── Tour ──────────────────────────────────────────────────────────
+  tourStep: number;
+  startTour: () => void;
+  nextTourStep: () => void;
+  prevTourStep: () => void;
+  endTour: () => Promise<void>;
+  registerTourTarget: (key: string, ref: React.RefObject<View>) => void;
+  getTourRef: (key: string) => React.RefObject<View> | undefined;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -133,6 +176,24 @@ export default function RootLayout() {
   const [completionData, setCompletionData] = useState<{ [key: string]: number[] }>({});
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // ── Tour state ────────────────────────────────────────────────────
+  const [tourStep, setTourStep] = useState(-1);
+  const tourRefs = useRef<Record<string, React.RefObject<View>>>({});
+
+  const startTour = () => setTourStep(0);
+  const nextTourStep = () =>
+    setTourStep(s => (s + 1 <= TOUR_STEP_COUNT ? s + 1 : s));
+  const prevTourStep = () =>
+    setTourStep(s => (s - 1 >= 0 ? s - 1 : 0));
+  const endTour = async () => {
+    setTourStep(-1);
+    await AsyncStorage.setItem(TOUR_SEEN_KEY, 'true');
+  };
+  const registerTourTarget = (key: string, ref: React.RefObject<View>) => {
+    tourRefs.current[key] = ref;
+  };
+  const getTourRef = (key: string) => tourRefs.current[key];
+
   useEffect(() => {
     loadAllData();
   }, []);
@@ -153,17 +214,15 @@ export default function RootLayout() {
 
       const validThemes: ThemeMode[] = ['light', 'dark', 'pink', 'blue', 'green', 'yellow'];
       if (!isMigrated && savedTheme === 'pink') {
-        // One-time migration: pink was the old default, reset to light
         await AsyncStorage.multiSet([[THEME_STORAGE_KEY, 'light'], [THEME_MIGRATION_KEY, 'true']]);
         setThemeState('light');
       } else if (savedTheme && validThemes.includes(savedTheme as ThemeMode)) {
         setThemeState(savedTheme as ThemeMode);
       } else if (!isMigrated) {
-        // First launch: mark migration done so we never override user's choice again
         await AsyncStorage.setItem(THEME_MIGRATION_KEY, 'true');
       }
       if (savedJob) setSelectedJob(savedJob as JobType);
-      if (savedRoutines) setRoutines(JSON.parse(savedRoutines));
+      if (savedRoutines) setRoutines((JSON.parse(savedRoutines) as any[]).map(migrateRoutine));
       if (savedCompletion) setCompletionData(JSON.parse(savedCompletion));
       if (savedProfile) setUserProfile(JSON.parse(savedProfile));
     } catch (e) {
@@ -194,27 +253,67 @@ export default function RootLayout() {
     await AsyncStorage.setItem(JOB_STORAGE_KEY, job);
   };
 
-  const addRoutine = async (task: string) => {
+  const addRoutine = async (task: string, repeat: RepeatType = 'daily', days?: number[], startDate?: string) => {
+    const effectiveStart = startDate ?? format(new Date(), 'yyyy-MM-dd');
     const newId = Date.now();
-    const nextRoutines = [...routines, { id: newId, task }];
+    const newRoutine: Routine = { id: newId, task, repeat, startDate: effectiveStart, ...(days ? { days } : {}) };
+    const nextRoutines = [...routines, newRoutine];
     setRoutines(nextRoutines);
     await AsyncStorage.setItem(ROUTINE_LIST_KEY, JSON.stringify(nextRoutines));
   };
 
-  const deleteRoutine = async (id: number) => {
-    const nextRoutines = routines.filter(r => r.id !== id);
+  const addRoutinesBulk = async (
+    items: Array<{ task: string; repeat: RepeatType; days?: number[]; startDate: string; endDate?: string }>,
+  ) => {
+    const now = Date.now();
+    const newRoutines: Routine[] = items.map((item, i) => ({
+      id: now + i,
+      task: item.task,
+      repeat: item.repeat,
+      startDate: item.startDate,
+      ...(item.days ? { days: item.days } : {}),
+      ...(item.endDate ? { endDate: item.endDate } : {}),
+    }));
+    const nextRoutines = [...routines, ...newRoutines];
+    setRoutines(nextRoutines);
+    await AsyncStorage.setItem(ROUTINE_LIST_KEY, JSON.stringify(nextRoutines));
+  };
+
+  const deleteRoutine = async (id: number, specificDate?: string) => {
+    let nextRoutines: Routine[];
+    if (specificDate) {
+      // 해당 날짜만 건너뜀 — 다른 날짜에는 영향 없음
+      nextRoutines = routines.map(r =>
+        r.id === id
+          ? { ...r, skipDates: [...(r.skipDates ?? []), specificDate] }
+          : r
+      );
+    } else {
+      // 전체 삭제 (내일부터 완전 비활성)
+      const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+      nextRoutines = routines.map(r => r.id === id ? { ...r, endDate: tomorrow } : r);
+    }
     setRoutines(nextRoutines);
     await AsyncStorage.setItem(ROUTINE_LIST_KEY, JSON.stringify(nextRoutines));
   };
 
   const initDefaultRoutines = async () => {
+    const today = format(new Date(), 'yyyy-MM-dd');
     const now = Date.now();
     const defaults: Routine[] = ONBOARDING_DEFAULT_ROUTINES.map((task, i) => ({
       id: now + i,
       task,
+      repeat: 'daily' as RepeatType,
+      startDate: today,
     }));
     setRoutines(defaults);
     await AsyncStorage.setItem(ROUTINE_LIST_KEY, JSON.stringify(defaults));
+  };
+
+  const resetPlans = async () => {
+    setRoutines([]);
+    setCompletionData({});
+    await AsyncStorage.multiRemove([ROUTINE_LIST_KEY, ROUTINE_DATA_KEY]);
   };
 
   const toggleRoutineCompletion = async (date: string, id: number) => {
@@ -253,11 +352,20 @@ export default function RootLayout() {
         updateJob,
         routines,
         addRoutine,
+        addRoutinesBulk,
         deleteRoutine,
         initDefaultRoutines,
         completionData,
         toggleRoutineCompletion,
-        isLoaded
+        resetPlans,
+        isLoaded,
+        tourStep,
+        startTour,
+        nextTourStep,
+        prevTourStep,
+        endTour,
+        registerTourTarget,
+        getTourRef,
       }}>
         <NavigationProvider value={navTheme}>
           <Stack>
@@ -268,6 +376,7 @@ export default function RootLayout() {
           </Stack>
           <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
         </NavigationProvider>
+        <TourOverlay />
       </AppContext.Provider>
     </SafeAreaProvider>
   );
