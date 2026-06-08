@@ -80,6 +80,7 @@ export default function OnboardingScreen() {
     selectedJob && JOB_CHARACTERS[selectedJob] ? selectedJob : null
   );
   const [step, setStep] = useState(0);
+  const [templateChoice, setTemplateChoice] = useState<'template' | 'empty' | null>(null);
 
   // Job picker state (shared between step 2 and edit mode)
   const [jobSearchQuery, setJobSearchQuery] = useState('');
@@ -88,6 +89,7 @@ export default function OnboardingScreen() {
   const canProceedStep0 = name.trim().length > 0 && nickname.trim().length > 0;
   const canProceedStep1 = gender.length > 0 && birthdate !== null;
   const canComplete = selectedJobLocal !== null;
+  const canCompleteStep3 = templateChoice !== null;
 
   const handleConfirmDate = (date: Date) => {
     setBirthdate(date);
@@ -108,7 +110,9 @@ export default function OnboardingScreen() {
     if (isEditMode) {
       router.back();
     } else {
-      await initDefaultRoutines();
+      if (templateChoice === 'template') {
+        await initDefaultRoutines();
+      }
       router.replace({ pathname: '/(tabs)', params: { welcome: '1' } });
     }
   };
@@ -323,7 +327,7 @@ export default function OnboardingScreen() {
 
         {/* 진행 인디케이터 */}
         <View style={styles.progressRow}>
-          {[0, 1, 2].map(i => (
+          {[0, 1, 2, 3].map(i => (
             <View
               key={i}
               style={[
@@ -390,6 +394,71 @@ export default function OnboardingScreen() {
           </ScrollView>
         )}
 
+        {/* Step 3: 시작 방식 선택 */}
+        {step === 3 && (
+          <ScrollView contentContainerStyle={styles.stepContent} showsVerticalScrollIndicator={false}>
+            <Text style={[styles.stepTitle, { color: colors.textMain }]}>어떻게 시작할까요? 🚀</Text>
+            <Text style={[styles.stepSubtitle, { color: colors.textSub }]}>시작 방식을 선택해주세요.</Text>
+
+            {/* 직장인 기본 템플릿 */}
+            <TouchableOpacity
+              style={[
+                styles.templateCard,
+                {
+                  backgroundColor: templateChoice === 'template' ? colors.primary + '18' : colors.card,
+                  borderColor: templateChoice === 'template' ? colors.primary : colors.border,
+                  borderWidth: templateChoice === 'template' ? 2.5 : 1.5,
+                },
+              ]}
+              onPress={() => setTemplateChoice('template')}
+              activeOpacity={0.8}
+            >
+              {templateChoice === 'template' && (
+                <View style={[styles.templateCheck, { backgroundColor: colors.primary }]}>
+                  <Ionicons name="checkmark" size={12} color="#fff" />
+                </View>
+              )}
+              <Text style={[styles.templateTitle, { color: templateChoice === 'template' ? colors.primary : colors.textMain }]}>
+                직장인 기본 템플릿
+              </Text>
+              <Text style={[styles.templateDesc, { color: colors.textSub }]}>오늘 하루 4가지 기본 계획이 생성돼요</Text>
+              <View style={styles.templateItems}>
+                {['🏃 운동 30분', '📚 영어 공부 10분', '💧 물 2L 마시기', '😴 7시간 이상 수면'].map(item => (
+                  <View key={item} style={styles.templateItem}>
+                    <Ionicons name="checkmark-circle-outline" size={14} color={colors.textSub} />
+                    <Text style={[styles.templateItemText, { color: colors.textSub }]}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            </TouchableOpacity>
+
+            {/* 빈 상태로 시작 */}
+            <TouchableOpacity
+              style={[
+                styles.templateCard,
+                {
+                  backgroundColor: templateChoice === 'empty' ? colors.primary + '18' : colors.card,
+                  borderColor: templateChoice === 'empty' ? colors.primary : colors.border,
+                  borderWidth: templateChoice === 'empty' ? 2.5 : 1.5,
+                  marginTop: 14,
+                },
+              ]}
+              onPress={() => setTemplateChoice('empty')}
+              activeOpacity={0.8}
+            >
+              {templateChoice === 'empty' && (
+                <View style={[styles.templateCheck, { backgroundColor: colors.primary }]}>
+                  <Ionicons name="checkmark" size={12} color="#fff" />
+                </View>
+              )}
+              <Text style={[styles.templateTitle, { color: templateChoice === 'empty' ? colors.primary : colors.textMain }]}>
+                빈 상태로 시작
+              </Text>
+              <Text style={[styles.templateDesc, { color: colors.textSub }]}>아무 계획도 생성하지 않아요</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
         {/* 하단 내비게이션 */}
         <View style={[styles.footer, { backgroundColor: colors.background }]}>
           {step > 0 && (
@@ -413,21 +482,23 @@ export default function OnboardingScreen() {
                 backgroundColor:
                   (step === 0 && canProceedStep0) ||
                   (step === 1 && canProceedStep1) ||
-                  (step === 2 && canComplete)
+                  (step === 2 && canComplete) ||
+                  (step === 3 && canCompleteStep3)
                     ? colors.primary
                     : colors.border,
                 flex: 1,
                 marginLeft: step > 0 ? 12 : 0,
               },
             ]}
-            onPress={step === 2 ? handleSave : () => setStep(step + 1)}
+            onPress={step === 3 ? handleSave : () => setStep(step + 1)}
             disabled={
               (step === 0 && !canProceedStep0) ||
               (step === 1 && !canProceedStep1) ||
-              (step === 2 && !canComplete)
+              (step === 2 && !canComplete) ||
+              (step === 3 && !canCompleteStep3)
             }
           >
-            <Text style={styles.nextBtnText}>{step === 2 ? '시작하기' : '다음'}</Text>
+            <Text style={styles.nextBtnText}>{step === 3 ? '시작하기' : '다음'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -557,6 +628,24 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   nextBtnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+
+  // 시작 방식 선택 템플릿 카드
+  templateCard: {
+    borderRadius: 20, padding: 20,
+    position: 'relative',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+  },
+  templateCheck: {
+    position: 'absolute', top: 14, right: 14,
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  templateTitle: { fontSize: 17, fontWeight: '800', marginBottom: 6 },
+  templateDesc: { fontSize: 13, fontWeight: '500', marginBottom: 10 },
+  templateItems: { gap: 6 },
+  templateItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  templateItemText: { fontSize: 13, fontWeight: '600' },
 
   // 수정 모드
   editScrollContent: { padding: 20, paddingBottom: 48 },

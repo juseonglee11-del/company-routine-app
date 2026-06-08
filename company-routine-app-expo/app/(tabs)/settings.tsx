@@ -200,6 +200,12 @@ export default function SettingsScreen() {
         {/* 앱 설정 */}
         <Text style={[styles.sectionTitle, { color: colors.textSub, marginTop: 28 }]}>앱 설정</Text>
         <SettingItem
+          icon="notifications-outline"
+          label="알림 설정"
+          value="배포 버전에서 활성화"
+          onPress={() => Alert.alert('알림', '알림 기능은 배포 버전에서 활성화됩니다.')}
+        />
+        <SettingItem
           icon="compass-outline"
           label="앱 사용법 다시 보기"
           onPress={async () => {
@@ -207,11 +213,6 @@ export default function SettingsScreen() {
             router.navigate('/(tabs)');
             setTimeout(() => startTour(), 400);
           }}
-        />
-        <SettingItem
-          icon="notifications-outline"
-          label="알림 설정"
-          onPress={() => handleAction('알림 설정')}
         />
         <SettingItem
           icon="shield-checkmark-outline"

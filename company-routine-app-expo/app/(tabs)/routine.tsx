@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { format } from 'date-fns';
-import { useAppTheme, isRoutineActiveOnDate, RepeatType } from '../_layout';
+import { useAppTheme, isRoutineActiveOnDate } from '../_layout';
 
 // ── Calendar locale ───────────────────────────────────────────────
 LocaleConfig.locales['ko'] = {
@@ -26,25 +26,6 @@ LocaleConfig.locales['ko'] = {
 };
 LocaleConfig.defaultLocale = 'ko';
 
-// ── Constants ─────────────────────────────────────────────────────
-const REPEAT_OPTIONS: { key: RepeatType; label: string }[] = [
-  { key: 'daily',   label: '매일' },
-  { key: 'weekday', label: '평일' },
-  { key: 'weekend', label: '주말' },
-  { key: 'custom',  label: '요일 선택' },
-];
-
-const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
-
-const getRepeatLabel = (repeat: RepeatType, days?: number[]): string => {
-  if (repeat === 'daily')   return '매일';
-  if (repeat === 'weekday') return '평일';
-  if (repeat === 'weekend') return '주말';
-  if (repeat === 'custom' && days && days.length > 0) {
-    return days.map(d => DAY_LABELS[d]).join('·');
-  }
-  return '요일 선택';
-};
 
 // ── Screen ────────────────────────────────────────────────────────
 export default function RoutineScreen() {
@@ -59,14 +40,13 @@ export default function RoutineScreen() {
   const [selectedDate, setSelectedDate] = useState(todayStr);
 
   // Add-form state
-  const [newTask, setNewTask]     = useState('');
-  const [repeat, setRepeat]       = useState<RepeatType>('daily');
-  const [customDays, setCustomDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [newTask, setNewTask] = useState('');
 
   // Tour refs
   const calendarRef   = useRef<View>(null);
   const dateRecordRef = useRef<View>(null);
   const addRef        = useRef<View>(null);
+  const newTaskInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     registerTourTarget('routineCalendar',   calendarRef   as React.RefObject<View>);
@@ -127,15 +107,12 @@ export default function RoutineScreen() {
   // ── Handlers ──────────────────────────────────────────────────
   const handleAdd = () => {
     if (!newTask.trim()) return;
-    addRoutine(
-      newTask.trim(),
-      repeat,
-      repeat === 'custom' ? customDays : undefined,
-      selectedDate,          // 선택한 날짜부터 시작
-    );
+    // 선택한 날짜 하루에만 표시 (endDate = 다음 날)
+    const nextDay = new Date(selectedDate + 'T00:00:00');
+    nextDay.setDate(nextDay.getDate() + 1);
+    const endDate = format(nextDay, 'yyyy-MM-dd');
+    addRoutinesBulk([{ task: newTask.trim(), repeat: 'daily', startDate: selectedDate, endDate }]);
     setNewTask('');
-    setRepeat('daily');
-    setCustomDays([1, 2, 3, 4, 5]);
   };
 
   const handleDelete = (id: number) => {
@@ -143,31 +120,22 @@ export default function RoutineScreen() {
     deleteRoutine(id, selectedDate);
   };
 
-  const toggleDay = (dow: number) =>
-    setCustomDays(prev =>
-      prev.includes(dow) ? prev.filter(d => d !== dow) : [...prev, dow].sort(),
-    );
+const handleCopyFromYesterday = () => {
+    const prevDay = new Date(selectedDate + 'T00:00:00');
+    prevDay.setDate(prevDay.getDate() - 1);
+    const yesterdayStr = format(prevDay, 'yyyy-MM-dd');
 
-  // 최근 계획 불러오기: 항상 오늘 날짜의 계획을 기준으로 복사
-  const handleCopyFromRecent = () => {
-    if (selectedDate === todayStr) {
-      Alert.alert('알림', '오늘 날짜는 불러올 수 없습니다.');
+    const yesterdayRoutines = routines.filter(r => isRoutineActiveOnDate(r, yesterdayStr));
+    if (yesterdayRoutines.length === 0) {
+      Alert.alert('복사할 계획 없음', '전날 등록된 계획이 없습니다.');
       return;
     }
 
-    const todayRoutines = routines.filter(r => isRoutineActiveOnDate(r, todayStr));
-    if (todayRoutines.length === 0) {
-      Alert.alert('불러올 계획 없음', '오늘 등록된 계획이 없습니다.');
-      return;
-    }
-
-    // selectedDate 하루에만 표시되도록 endDate = 다음 날로 고정
-    // repeat은 'daily'로 강제해서 요일 조건 없이 반드시 selectedDate에 표시
     const nextDay = new Date(selectedDate + 'T00:00:00');
     nextDay.setDate(nextDay.getDate() + 1);
     const endDate = format(nextDay, 'yyyy-MM-dd');
 
-    const items = todayRoutines.map(r => ({
+    const items = yesterdayRoutines.map(r => ({
       task: r.task,
       repeat: 'daily' as const,
       startDate: selectedDate,
@@ -179,10 +147,10 @@ export default function RoutineScreen() {
     if (activeRoutines.length > 0) {
       Alert.alert(
         '기존 계획이 있습니다',
-        `이 날짜에 이미 계획이 있습니다.\n오늘 계획을 추가로 불러올까요?`,
+        '이 날짜에 이미 계획이 있습니다.\n전날 계획을 추가로 복사할까요?',
         [
           { text: '취소', style: 'cancel' },
-          { text: '불러오기', onPress: doCopy },
+          { text: '복사하기', onPress: doCopy },
         ],
       );
     } else {
@@ -276,20 +244,29 @@ export default function RoutineScreen() {
             {/* Plan list */}
             {activeRoutines.length === 0 ? (
               <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Ionicons name="calendar-outline" size={28} color={colors.textSub} />
+                <Text style={[styles.emptyTitle, { color: colors.textMain }]}>아직 계획이 없어요 📝</Text>
                 <Text style={[styles.emptyText, { color: colors.textSub }]}>
-                  이 날에는 등록된 계획이 없어요
+                  어제 계획을 복사하거나 새 계획을 만들어보세요.
                 </Text>
-                {/* 최근 계획 불러오기 — 편집 가능한 날만 */}
                 {isEditable && (
-                  <TouchableOpacity
-                    style={[styles.copyBtn, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '50' }]}
-                    onPress={handleCopyFromRecent}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="copy-outline" size={15} color={colors.primary} />
-                    <Text style={[styles.copyBtnText, { color: colors.primary }]}>최근 계획 불러오기</Text>
-                  </TouchableOpacity>
+                  <View style={styles.emptyBtnRow}>
+                    <TouchableOpacity
+                      style={[styles.copyBtn, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '50', flex: 1 }]}
+                      onPress={handleCopyFromYesterday}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="copy-outline" size={15} color={colors.primary} />
+                      <Text style={[styles.copyBtnText, { color: colors.primary }]}>어제 계획 복사</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.copyBtn, { backgroundColor: colors.card, borderColor: colors.border, flex: 1 }]}
+                      onPress={() => newTaskInputRef.current?.focus()}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="add-circle-outline" size={15} color={colors.textSub} />
+                      <Text style={[styles.copyBtnText, { color: colors.textSub }]}>새 계획 만들기</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             ) : (
@@ -321,12 +298,6 @@ export default function RoutineScreen() {
                       {r.task}
                     </Text>
 
-                    <View style={[styles.repeatBadge, { backgroundColor: colors.primary + '16' }]}>
-                      <Text style={[styles.repeatBadgeText, { color: colors.primary }]}>
-                        {getRepeatLabel(r.repeat, r.days)}
-                      </Text>
-                    </View>
-
                     {/* 삭제 버튼 — 편집 가능한 날만 */}
                     {isEditable && (
                       <TouchableOpacity
@@ -352,6 +323,7 @@ export default function RoutineScreen() {
               <Text style={[styles.addTitle, { color: colors.textMain }]}>계획 추가</Text>
 
               <TextInput
+                ref={newTaskInputRef}
                 style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textMain }]}
                 placeholder="새 계획 내용을 입력하세요"
                 placeholderTextColor={colors.textSub}
@@ -360,57 +332,6 @@ export default function RoutineScreen() {
                 returnKeyType="done"
                 onSubmitEditing={handleAdd}
               />
-
-              {/* 반복 설정 */}
-              <Text style={[styles.repeatLabel, { color: colors.textSub }]}>반복 설정</Text>
-              <View style={styles.repeatRow}>
-                {REPEAT_OPTIONS.map(opt => (
-                  <TouchableOpacity
-                    key={opt.key}
-                    style={[
-                      styles.repeatChip,
-                      { borderColor: repeat === opt.key ? colors.primary : colors.border },
-                      repeat === opt.key && { backgroundColor: colors.primary + '18' },
-                    ]}
-                    onPress={() => setRepeat(opt.key)}
-                  >
-                    <Text
-                      style={[
-                        styles.repeatChipText,
-                        { color: repeat === opt.key ? colors.primary : colors.textSub },
-                      ]}
-                    >
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* 요일 선택 */}
-              {repeat === 'custom' && (
-                <View style={styles.dayRow}>
-                  {DAY_LABELS.map((label, dow) => {
-                    const sel = customDays.includes(dow);
-                    return (
-                      <TouchableOpacity
-                        key={dow}
-                        style={[
-                          styles.dayChip,
-                          {
-                            backgroundColor: sel ? colors.primary : colors.background,
-                            borderColor: sel ? colors.primary : colors.border,
-                          },
-                        ]}
-                        onPress={() => toggleDay(dow)}
-                      >
-                        <Text style={[styles.dayChipText, { color: sel ? '#fff' : colors.textSub }]}>
-                          {label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
 
               <TouchableOpacity
                 style={[
@@ -459,16 +380,17 @@ const styles = StyleSheet.create({
 
   emptyCard: {
     borderRadius: 18, borderWidth: 1,
-    padding: 28, alignItems: 'center', gap: 10,
+    padding: 24, alignItems: 'center', gap: 8,
     marginBottom: 16,
   },
-  emptyText: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  emptyTitle: { fontSize: 15, fontWeight: '800', textAlign: 'center' },
+  emptyText: { fontSize: 13, fontWeight: '500', textAlign: 'center', lineHeight: 18 },
+  emptyBtnRow: { flexDirection: 'row', gap: 8, width: '100%', marginTop: 4 },
 
   copyBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     borderWidth: 1.5, borderRadius: 14,
-    paddingHorizontal: 16, paddingVertical: 10,
-    marginTop: 4,
+    paddingHorizontal: 12, paddingVertical: 10,
   },
   copyBtnText: { fontSize: 13, fontWeight: '700' },
 
@@ -478,9 +400,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   routineText:    { flex: 1, fontSize: 15, fontWeight: '600', marginLeft: 10 },
-  repeatBadge:    { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginLeft: 6 },
-  repeatBadgeText:{ fontSize: 10, fontWeight: '800' },
-
   addSection: {
     borderRadius: 22, borderWidth: 1,
     padding: 18, marginTop: 8,
@@ -491,20 +410,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 15, fontWeight: '500', marginBottom: 14,
   },
-  repeatLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  repeatRow:   { flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' },
-  repeatChip: {
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 12, borderWidth: 1.5,
-  },
-  repeatChipText: { fontSize: 13, fontWeight: '700' },
-  dayRow:    { flexDirection: 'row', gap: 6, marginBottom: 14, flexWrap: 'wrap' },
-  dayChip: {
-    width: 36, height: 36, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5,
-  },
-  dayChipText: { fontSize: 13, fontWeight: '700' },
   addBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     height: 50, borderRadius: 16, gap: 6,

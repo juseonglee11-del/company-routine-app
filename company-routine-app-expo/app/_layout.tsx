@@ -10,6 +10,11 @@ import { format, addDays } from 'date-fns';
 import { THEME_COLORS } from '@/constants/theme';
 import { JOB_STORAGE_KEY, JOIN_DATE_KEY, JobType } from '@/constants/jobs';
 import TourOverlay, { TOUR_STEP_COUNT, TOUR_SEEN_KEY } from '@/components/TourOverlay';
+import {
+  NotifSettings,
+  DEFAULT_NOTIF_SETTINGS,
+  NOTIF_SETTINGS_KEY,
+} from '@/utils/notifications';
 
 const PinkTheme: Theme = {
   ...DefaultTheme,
@@ -137,6 +142,9 @@ interface AppContextType {
 
   isLoaded: boolean;
 
+  notifSettings: NotifSettings;
+  updateNotifSettings: (partial: Partial<NotifSettings>) => Promise<void>;
+
   // ── Tour ──────────────────────────────────────────────────────────
   tourStep: number;
   startTour: () => void;
@@ -175,6 +183,7 @@ export default function RootLayout() {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [completionData, setCompletionData] = useState<{ [key: string]: number[] }>({});
   const [isLoaded, setIsLoaded] = useState(false);
+  const [notifSettings, setNotifSettings] = useState<NotifSettings>(DEFAULT_NOTIF_SETTINGS);
 
   // ── Tour state ────────────────────────────────────────────────────
   const [tourStep, setTourStep] = useState(-1);
@@ -203,13 +212,14 @@ export default function RootLayout() {
       // DEV ONLY: clear user data on every launch for onboarding testing
       await AsyncStorage.multiRemove([JOB_STORAGE_KEY, USER_PROFILE_KEY, ROUTINE_LIST_KEY, ROUTINE_DATA_KEY, JOIN_DATE_KEY]);
 
-      const [savedTheme, savedJob, savedRoutines, savedCompletion, savedProfile, isMigrated] = await Promise.all([
+      const [savedTheme, savedJob, savedRoutines, savedCompletion, savedProfile, isMigrated, savedNotifSettings] = await Promise.all([
         AsyncStorage.getItem(THEME_STORAGE_KEY),
         AsyncStorage.getItem(JOB_STORAGE_KEY),
         AsyncStorage.getItem(ROUTINE_LIST_KEY),
         AsyncStorage.getItem(ROUTINE_DATA_KEY),
         AsyncStorage.getItem(USER_PROFILE_KEY),
         AsyncStorage.getItem(THEME_MIGRATION_KEY),
+        AsyncStorage.getItem(NOTIF_SETTINGS_KEY),
       ]);
 
       const validThemes: ThemeMode[] = ['light', 'dark', 'pink', 'blue', 'green', 'yellow'];
@@ -225,6 +235,7 @@ export default function RootLayout() {
       if (savedRoutines) setRoutines((JSON.parse(savedRoutines) as any[]).map(migrateRoutine));
       if (savedCompletion) setCompletionData(JSON.parse(savedCompletion));
       if (savedProfile) setUserProfile(JSON.parse(savedProfile));
+      if (savedNotifSettings) setNotifSettings({ ...DEFAULT_NOTIF_SETTINGS, ...JSON.parse(savedNotifSettings) });
     } catch (e) {
       console.error('Failed to load data', e);
     } finally {
@@ -299,15 +310,23 @@ export default function RootLayout() {
 
   const initDefaultRoutines = async () => {
     const today = format(new Date(), 'yyyy-MM-dd');
+    const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
     const now = Date.now();
     const defaults: Routine[] = ONBOARDING_DEFAULT_ROUTINES.map((task, i) => ({
       id: now + i,
       task,
       repeat: 'daily' as RepeatType,
       startDate: today,
+      endDate: tomorrow,
     }));
     setRoutines(defaults);
     await AsyncStorage.setItem(ROUTINE_LIST_KEY, JSON.stringify(defaults));
+  };
+
+  const updateNotifSettings = async (partial: Partial<NotifSettings>) => {
+    const next = { ...notifSettings, ...partial };
+    setNotifSettings(next);
+    await AsyncStorage.setItem(NOTIF_SETTINGS_KEY, JSON.stringify(next));
   };
 
   const resetPlans = async () => {
@@ -359,6 +378,8 @@ export default function RootLayout() {
         toggleRoutineCompletion,
         resetPlans,
         isLoaded,
+        notifSettings,
+        updateNotifSettings,
         tourStep,
         startTour,
         nextTourStep,
