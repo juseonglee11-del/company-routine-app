@@ -209,9 +209,6 @@ export default function RootLayout() {
 
   const loadAllData = async () => {
     try {
-      // DEV ONLY: clear user data on every launch for onboarding testing
-      await AsyncStorage.multiRemove([JOB_STORAGE_KEY, USER_PROFILE_KEY, ROUTINE_LIST_KEY, ROUTINE_DATA_KEY, JOIN_DATE_KEY]);
-
       const [savedTheme, savedJob, savedRoutines, savedCompletion, savedProfile, isMigrated, savedNotifSettings] = await Promise.all([
         AsyncStorage.getItem(THEME_STORAGE_KEY),
         AsyncStorage.getItem(JOB_STORAGE_KEY),

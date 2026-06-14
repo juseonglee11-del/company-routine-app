@@ -389,7 +389,7 @@ export default function OnboardingScreen() {
         {step === 2 && (
           <ScrollView contentContainerStyle={styles.stepContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={[styles.stepTitle, { color: colors.textMain }]}>어떤 일을 하시나요? 💼</Text>
-            <Text style={[styles.stepSubtitle, { color: colors.textSub }]}>직종에 맞는 루틴을 제안해드릴게요.</Text>
+            <Text style={[styles.stepSubtitle, { color: colors.textSub }]}>직종에 맞는 계획을 제안해드릴게요.</Text>
             {renderJobPicker()}
           </ScrollView>
         )}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,12 +7,24 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../_layout';
 import { TOUR_SEEN_KEY } from '@/components/TourOverlay';
+
+const FORMSPREE_ENDPOINT = 'https://formspree.io/f/meedbpgb';
+const APP_VERSION = '1.0.0';
+const PRIVACY_POLICY_URL = 'https://juseonglee11-del.github.io/company-routine-app/privacy-policy.html';
+
+type InquiryType = '버그 제보' | '기능 제안' | '기타 문의';
 
 type ThemeMode = 'light' | 'dark' | 'pink' | 'blue' | 'green' | 'yellow';
 
@@ -56,6 +68,60 @@ const THEME_STORAGE_KEY = '@theme_preference';
 export default function SettingsScreen() {
   const { theme, setTheme, colors, userProfile, startTour, resetPlans } = useAppTheme();
   const router = useRouter();
+
+  const [supportModalVisible, setSupportModalVisible] = useState(false);
+  const [inquiryType, setInquiryType] = useState<InquiryType>('버그 제보');
+  const [inquiryTitle, setInquiryTitle] = useState('');
+  const [inquiryContent, setInquiryContent] = useState('');
+  const [isSending, setIsSending] = useState(false);
+
+  const handleOpenSupport = () => {
+    setInquiryType('버그 제보');
+    setInquiryTitle('');
+    setInquiryContent('');
+    setSupportModalVisible(true);
+  };
+
+  const handleSendSupport = async () => {
+    if (!inquiryTitle.trim()) {
+      Alert.alert('입력 오류', '제목을 입력해주세요.');
+      return;
+    }
+    if (!inquiryContent.trim()) {
+      Alert.alert('입력 오류', '내용을 입력해주세요.');
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      const body: Record<string, string> = {
+        type: inquiryType,
+        title: inquiryTitle.trim(),
+        message: inquiryContent.trim(),
+        appVersion: APP_VERSION,
+      };
+      if (userProfile?.nickname) {
+        body.nickname = userProfile.nickname;
+      }
+
+      const res = await fetch(FORMSPREE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        setSupportModalVisible(false);
+        Alert.alert('접수 완료', '문의가 접수되었습니다. 감사합니다.');
+      } else {
+        Alert.alert('전송 실패', '전송에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      }
+    } catch {
+      Alert.alert('전송 실패', '전송에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   const handleResetTheme = () => {
     Alert.alert('테마 초기화', '테마를 라이트 모드로 초기화하시겠습니까?', [
@@ -215,14 +281,14 @@ export default function SettingsScreen() {
           }}
         />
         <SettingItem
-          icon="shield-checkmark-outline"
-          label="데이터 백업 및 복원"
-          onPress={() => handleAction('데이터 백업')}
-        />
-        <SettingItem
           icon="help-circle-outline"
           label="고객 지원"
-          onPress={() => handleAction('고객 지원')}
+          onPress={handleOpenSupport}
+        />
+        <SettingItem
+          icon="document-text-outline"
+          label="개인정보처리방침"
+          onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
         />
 
         {/* 데이터 관리 */}
@@ -236,21 +302,106 @@ export default function SettingsScreen() {
           <Text style={[styles.dangerButtonText, { color: '#FF3B30' }]}>계획 초기화하기</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={() =>
-            Alert.alert('로그아웃', '정말 로그아웃 하시겠습니까?', [
-              { text: '취소', style: 'cancel' },
-              { text: '확인', onPress: () => handleAction('로그아웃 완료') },
-            ])
-          }
-        >
-          <Text style={styles.logoutText}>로그아웃</Text>
-        </TouchableOpacity>
-
-        <Text style={[styles.version, { color: colors.textSub }]}>차곡차곡 v1.0.0</Text>
+        {/* 앱 정보 */}
+        <View style={[styles.appInfoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.appInfoName, { color: colors.textMain }]}>근속일 계산기 · 일정 계획표</Text>
+          <Text style={[styles.appInfoDesc, { color: colors.textSub }]}>근속일, 계획, 커리어 기록을 관리하는 앱</Text>
+          <Text style={[styles.appInfoVersion, { color: colors.textSub }]}>버전 1.0.0</Text>
+        </View>
 
       </ScrollView>
+
+      {/* 고객 지원 모달 */}
+      <Modal
+        visible={supportModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSupportModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={[styles.modalSheet, { backgroundColor: colors.background, borderColor: colors.border }]}>
+
+            {/* 헤더 */}
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.textMain }]}>고객 지원</Text>
+              <TouchableOpacity onPress={() => setSupportModalVisible(false)} hitSlop={8}>
+                <Ionicons name="close" size={24} color={colors.textSub} />
+              </TouchableOpacity>
+            </View>
+
+            {/* 문의 유형 */}
+            <Text style={[styles.fieldLabel, { color: colors.textSub }]}>문의 유형</Text>
+            <View style={styles.typeRow}>
+              {(['버그 제보', '기능 제안', '기타 문의'] as InquiryType[]).map((t) => (
+                <TouchableOpacity
+                  key={t}
+                  style={[
+                    styles.typeChip,
+                    {
+                      backgroundColor: inquiryType === t ? colors.primary : colors.card,
+                      borderColor: inquiryType === t ? colors.primary : colors.border,
+                    },
+                  ]}
+                  onPress={() => setInquiryType(t)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.typeChipText,
+                      { color: inquiryType === t ? '#fff' : colors.textMain },
+                    ]}
+                  >
+                    {t}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* 제목 */}
+            <Text style={[styles.fieldLabel, { color: colors.textSub }]}>제목</Text>
+            <TextInput
+              style={[styles.titleInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.textMain }]}
+              placeholder="제목을 입력하세요"
+              placeholderTextColor={colors.textSub}
+              value={inquiryTitle}
+              onChangeText={setInquiryTitle}
+              maxLength={100}
+            />
+
+            {/* 내용 */}
+            <Text style={[styles.fieldLabel, { color: colors.textSub }]}>내용</Text>
+            <TextInput
+              style={[styles.contentInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.textMain }]}
+              placeholder="문의 내용을 입력하세요"
+              placeholderTextColor={colors.textSub}
+              value={inquiryContent}
+              onChangeText={setInquiryContent}
+              multiline
+              textAlignVertical="top"
+              maxLength={1000}
+            />
+
+            {/* 보내기 버튼 */}
+            <TouchableOpacity
+              style={[styles.sendButton, { backgroundColor: colors.primary, opacity: isSending ? 0.6 : 1 }]}
+              onPress={handleSendSupport}
+              disabled={isSending}
+              activeOpacity={0.8}
+            >
+              {isSending ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.sendButtonText}>보내기</Text>
+              )}
+            </TouchableOpacity>
+
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -292,7 +443,85 @@ const styles = StyleSheet.create({
     gap: 8, padding: 15, borderRadius: 18, borderWidth: 1.5, marginBottom: 4,
   },
   dangerButtonText: { fontSize: 15, fontWeight: '700' },
-  logoutButton: { marginTop: 28, alignItems: 'center', padding: 15 },
-  logoutText: { color: '#FF3B30', fontSize: 16, fontWeight: '700' },
   version: { textAlign: 'center', marginTop: 16, fontSize: 12, fontWeight: '500' },
+
+  // 고객 지원 모달
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800' },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginLeft: 2,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 18,
+  },
+  typeChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+  },
+  typeChipText: { fontSize: 13, fontWeight: '700' },
+  titleInput: {
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    marginBottom: 18,
+  },
+  contentInput: {
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    height: 130,
+    marginBottom: 20,
+  },
+  sendButton: {
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendButtonText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+
+  // 앱 정보 카드
+  appInfoCard: {
+    marginTop: 28,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  appInfoName: { fontSize: 15, fontWeight: '800', marginBottom: 6, textAlign: 'center' },
+  appInfoDesc: { fontSize: 13, fontWeight: '500', textAlign: 'center', marginBottom: 8 },
+  appInfoVersion: { fontSize: 12, fontWeight: '600' },
 });

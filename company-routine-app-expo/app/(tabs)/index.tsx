@@ -313,7 +313,7 @@ export default function HomeScreen() {
               })
             ) : (
               <Text style={[styles.emptyRoutine, { color: colors.textSub }]}>
-                루틴 탭에서 루틴을 추가해보세요 ✏️
+                계획 탭에서 계획을 추가해보세요 ✏️
               </Text>
             )}
           </View>
@@ -500,7 +500,7 @@ export default function HomeScreen() {
       {/* 가입 완료 토스트 */}
       {params.welcome === '1' && (
         <Animated.View style={[styles.toast, { opacity: toastOpacity }]}>
-          <Text style={styles.toastText}>기본 루틴 4개가 생성되었습니다 🎉</Text>
+          <Text style={styles.toastText}>기본 계획 4개가 생성되었습니다 🎉</Text>
         </Animated.View>
       )}
 
