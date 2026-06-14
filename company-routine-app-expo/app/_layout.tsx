@@ -15,6 +15,7 @@ import {
   NotifSettings,
   DEFAULT_NOTIF_SETTINGS,
   NOTIF_SETTINGS_KEY,
+  setupNotifications,
 } from '@/utils/notifications';
 
 const PinkTheme: Theme = {
@@ -172,6 +173,9 @@ export const unstable_settings = {
 
 // Keep splash screen visible while data loads from AsyncStorage
 SplashScreen.preventAutoHideAsync();
+
+// Configure notification handler and Android channel
+setupNotifications();
 
 // Initialize Google Mobile Ads once at startup (native Android builds only)
 if (Platform.OS === 'android') {

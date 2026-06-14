@@ -13,12 +13,23 @@ import {
   Platform,
   ActivityIndicator,
   Linking,
+  Switch,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { useAppTheme } from '../_layout';
 import { TOUR_SEEN_KEY } from '@/components/TourOverlay';
+import { JOIN_DATE_KEY } from '@/constants/jobs';
+import {
+  IS_EXPO_GO,
+  checkNotificationPermissions,
+  requestNotificationPermissions,
+  manageDailyPlanNotification,
+  manageIncompleteNotification,
+  manageAnniversaryNotifications,
+} from '@/utils/notifications';
 
 const FORMSPREE_ENDPOINT = 'https://formspree.io/f/meedbpgb';
 const APP_VERSION = '1.0.0';
@@ -66,14 +77,99 @@ const ThemeOption = ({
 const THEME_STORAGE_KEY = '@theme_preference';
 
 export default function SettingsScreen() {
-  const { theme, setTheme, colors, userProfile, startTour, resetPlans } = useAppTheme();
+  const { theme, setTheme, colors, userProfile, startTour, resetPlans, notifSettings, updateNotifSettings } = useAppTheme();
   const router = useRouter();
 
   const [supportModalVisible, setSupportModalVisible] = useState(false);
+
+  // ── Notification settings state ──────────────────────────────────
+  const [notifModalVisible, setNotifModalVisible]   = useState(false);
+  const [permissionGranted, setPermissionGranted]   = useState<boolean | null>(null);
+  const [joinDate, setJoinDate]                     = useState<string | null>(null);
+  const [timePickerFor, setTimePickerFor]           = useState<'daily' | 'incomplete' | null>(null);
   const [inquiryType, setInquiryType] = useState<InquiryType>('버그 제보');
   const [inquiryTitle, setInquiryTitle] = useState('');
   const [inquiryContent, setInquiryContent] = useState('');
   const [isSending, setIsSending] = useState(false);
+
+  // ── Notification handlers ─────────────────────────────────────────
+  const fmtTime = (h: number, m: number) =>
+    `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+  const getPickerDate = () => {
+    const d = new Date();
+    if (timePickerFor === 'daily') {
+      d.setHours(notifSettings.dailyPlanHour, notifSettings.dailyPlanMinute, 0);
+    } else if (timePickerFor === 'incomplete') {
+      d.setHours(notifSettings.incompleteHour, notifSettings.incompleteMinute, 0);
+    }
+    return d;
+  };
+
+  const handleOpenNotifSettings = async () => {
+    if (IS_EXPO_GO) {
+      Alert.alert('알림', '알림 기능은 배포 버전에서 활성화됩니다.');
+      return;
+    }
+    const granted = await checkNotificationPermissions();
+    setPermissionGranted(granted);
+    const jd = await AsyncStorage.getItem(JOIN_DATE_KEY);
+    setJoinDate(jd);
+    setNotifModalVisible(true);
+  };
+
+  const handleRequestPermission = async () => {
+    const granted = await requestNotificationPermissions();
+    setPermissionGranted(granted);
+    if (!granted) {
+      Alert.alert(
+        '알림 권한 필요',
+        '시스템 설정에서 알림 권한을 허용해주세요.',
+        [
+          { text: '취소', style: 'cancel' },
+          { text: '설정 열기', onPress: () => Linking.openSettings() },
+        ],
+      );
+    }
+  };
+
+  const handleToggleDailyPlan = async () => {
+    if (!permissionGranted) { await handleRequestPermission(); return; }
+    const next = !notifSettings.dailyPlanEnabled;
+    await updateNotifSettings({ dailyPlanEnabled: next });
+    await manageDailyPlanNotification(next, notifSettings.dailyPlanHour, notifSettings.dailyPlanMinute);
+  };
+
+  const handleToggleIncomplete = async () => {
+    if (!permissionGranted) { await handleRequestPermission(); return; }
+    const next = !notifSettings.incompleteEnabled;
+    await updateNotifSettings({ incompleteEnabled: next });
+    await manageIncompleteNotification(next, notifSettings.incompleteHour, notifSettings.incompleteMinute);
+  };
+
+  const handleToggleAnniversary = async () => {
+    if (!permissionGranted) { await handleRequestPermission(); return; }
+    const next = !notifSettings.anniversaryEnabled;
+    await updateNotifSettings({ anniversaryEnabled: next });
+    await manageAnniversaryNotifications(next, joinDate);
+  };
+
+  const handleTimeConfirm = async (date: Date) => {
+    const h = date.getHours();
+    const m = date.getMinutes();
+    if (timePickerFor === 'daily') {
+      await updateNotifSettings({ dailyPlanHour: h, dailyPlanMinute: m });
+      if (notifSettings.dailyPlanEnabled) {
+        await manageDailyPlanNotification(true, h, m);
+      }
+    } else if (timePickerFor === 'incomplete') {
+      await updateNotifSettings({ incompleteHour: h, incompleteMinute: m });
+      if (notifSettings.incompleteEnabled) {
+        await manageIncompleteNotification(true, h, m);
+      }
+    }
+    setTimePickerFor(null);
+  };
 
   const handleOpenSupport = () => {
     setInquiryType('버그 제보');
@@ -268,8 +364,8 @@ export default function SettingsScreen() {
         <SettingItem
           icon="notifications-outline"
           label="알림 설정"
-          value="배포 버전에서 활성화"
-          onPress={() => Alert.alert('알림', '알림 기능은 배포 버전에서 활성화됩니다.')}
+          value={IS_EXPO_GO ? '배포 버전에서 활성화' : undefined}
+          onPress={handleOpenNotifSettings}
         />
         <SettingItem
           icon="compass-outline"
@@ -310,6 +406,109 @@ export default function SettingsScreen() {
         </View>
 
       </ScrollView>
+
+      {/* 알림 설정 모달 */}
+      <Modal
+        visible={notifModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setNotifModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.textMain }]}>알림 설정</Text>
+              <TouchableOpacity onPress={() => setNotifModalVisible(false)} hitSlop={8}>
+                <Ionicons name="close" size={24} color={colors.textSub} />
+              </TouchableOpacity>
+            </View>
+
+            {/* 권한 상태 */}
+            {permissionGranted === false && (
+              <TouchableOpacity
+                style={[styles.permissionBanner, { backgroundColor: '#FF3B3010', borderColor: '#FF3B3040' }]}
+                onPress={handleRequestPermission}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="alert-circle-outline" size={16} color="#FF3B30" />
+                <Text style={[styles.permissionText, { color: '#FF3B30' }]}>
+                  알림 권한이 없습니다. 탭해서 권한을 허용해주세요.
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* 오늘의 계획 알림 */}
+            <View style={[styles.notifRow, { borderColor: colors.border }]}>
+              <View style={styles.notifRowLeft}>
+                <Text style={[styles.notifRowLabel, { color: colors.textMain }]}>오늘의 계획 알림</Text>
+                {notifSettings.dailyPlanEnabled && (
+                  <TouchableOpacity onPress={() => setTimePickerFor('daily')} style={styles.timeChip}>
+                    <Ionicons name="time-outline" size={13} color={colors.primary} />
+                    <Text style={[styles.timeChipText, { color: colors.primary }]}>
+                      {fmtTime(notifSettings.dailyPlanHour, notifSettings.dailyPlanMinute)}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Switch
+                value={notifSettings.dailyPlanEnabled}
+                onValueChange={handleToggleDailyPlan}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            {/* 미완료 계획 알림 */}
+            <View style={[styles.notifRow, { borderColor: colors.border }]}>
+              <View style={styles.notifRowLeft}>
+                <Text style={[styles.notifRowLabel, { color: colors.textMain }]}>미완료 계획 알림</Text>
+                {notifSettings.incompleteEnabled && (
+                  <TouchableOpacity onPress={() => setTimePickerFor('incomplete')} style={styles.timeChip}>
+                    <Ionicons name="time-outline" size={13} color={colors.primary} />
+                    <Text style={[styles.timeChipText, { color: colors.primary }]}>
+                      {fmtTime(notifSettings.incompleteHour, notifSettings.incompleteMinute)}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Switch
+                value={notifSettings.incompleteEnabled}
+                onValueChange={handleToggleIncomplete}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            {/* 입사 기념일 알림 */}
+            <View style={[styles.notifRow, { borderColor: colors.border }]}>
+              <View style={styles.notifRowLeft}>
+                <Text style={[styles.notifRowLabel, { color: colors.textMain }]}>입사 기념일 알림</Text>
+                <Text style={[styles.notifRowSub, { color: colors.textSub }]}>
+                  {joinDate ? '매년 입사일 오전 9:00' : '홈 화면에서 입사일 등록 후 사용 가능'}
+                </Text>
+              </View>
+              <Switch
+                value={notifSettings.anniversaryEnabled && !!joinDate}
+                onValueChange={handleToggleAnniversary}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor="#fff"
+                disabled={!joinDate}
+              />
+            </View>
+
+          </View>
+        </View>
+      </Modal>
+
+      {/* 시간 선택 피커 */}
+      <DateTimePickerModal
+        isVisible={timePickerFor !== null}
+        mode="time"
+        date={getPickerDate()}
+        onConfirm={handleTimeConfirm}
+        onCancel={() => setTimePickerFor(null)}
+        is24Hour
+      />
 
       {/* 고객 지원 모달 */}
       <Modal
@@ -511,6 +710,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendButtonText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+
+  // 알림 설정 모달
+  permissionBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 16,
+  },
+  permissionText: { fontSize: 13, fontWeight: '600', flex: 1 },
+  notifRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 14, borderBottomWidth: 1,
+  },
+  notifRowLeft: { flex: 1, marginRight: 12 },
+  notifRowLabel: { fontSize: 15, fontWeight: '600', marginBottom: 4 },
+  notifRowSub: { fontSize: 12, fontWeight: '500' },
+  timeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    alignSelf: 'flex-start',
+  },
+  timeChipText: { fontSize: 13, fontWeight: '700' },
 
   // 앱 정보 카드
   appInfoCard: {
