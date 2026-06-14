@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "차곡차곡 📈",
+    "name": "STACK",
     "slug": "company-routine-app-expo",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -17,7 +17,8 @@
         "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.juseonglee.companyroutine"
     },
     "web": {
       "output": "static",
@@ -57,6 +58,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "14d41181-ab3d-4183-9ca5-e2b1eee766b7"
+      }
     }
   }
 }
