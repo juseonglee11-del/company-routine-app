@@ -93,8 +93,11 @@ export default function SettingsScreen() {
   const [isSending, setIsSending] = useState(false);
 
   // ── Notification handlers ─────────────────────────────────────────
-  const fmtTime = (h: number, m: number) =>
-    `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  const fmtTime = (h: number, m: number) => {
+    const period = h < 12 ? '오전' : '오후';
+    const h12    = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return `${period} ${h12}:${String(m).padStart(2, '0')}`;
+  };
 
   const getPickerDate = () => {
     const d = new Date();
@@ -423,7 +426,7 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* 권한 상태 */}
+            {/* 권한 없음 배너 */}
             {permissionGranted === false && (
               <TouchableOpacity
                 style={[styles.permissionBanner, { backgroundColor: '#FF3B3010', borderColor: '#FF3B3040' }]}
@@ -437,63 +440,88 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             )}
 
-            {/* 오늘의 계획 알림 */}
-            <View style={[styles.notifRow, { borderColor: colors.border }]}>
-              <View style={styles.notifRowLeft}>
-                <Text style={[styles.notifRowLabel, { color: colors.textMain }]}>오늘의 계획 알림</Text>
-                {notifSettings.dailyPlanEnabled && (
-                  <TouchableOpacity onPress={() => setTimePickerFor('daily')} style={styles.timeChip}>
-                    <Ionicons name="time-outline" size={13} color={colors.primary} />
-                    <Text style={[styles.timeChipText, { color: colors.primary }]}>
+            {/* 오늘 계획 알림 */}
+            <View style={[styles.notifCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.notifCardTop}>
+                <Text style={[styles.notifCardLabel, { color: colors.textMain }]}>오늘 계획 알림</Text>
+                <Switch
+                  value={notifSettings.dailyPlanEnabled}
+                  onValueChange={handleToggleDailyPlan}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+              <Text style={[styles.notifCardDesc, { color: colors.textSub }]}>
+                매일 설정한 시간에 오늘 계획을 알려드려요.
+              </Text>
+              {notifSettings.dailyPlanEnabled && (
+                <TouchableOpacity
+                  style={[styles.notifTimeRow, { borderTopColor: colors.border }]}
+                  onPress={() => setTimePickerFor('daily')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.notifTimeLabel, { color: colors.textSub }]}>알림 시간</Text>
+                  <View style={styles.notifTimeRight}>
+                    <Text style={[styles.notifTimeValue, { color: colors.primary }]}>
                       {fmtTime(notifSettings.dailyPlanHour, notifSettings.dailyPlanMinute)}
                     </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              <Switch
-                value={notifSettings.dailyPlanEnabled}
-                onValueChange={handleToggleDailyPlan}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor="#fff"
-              />
+                    <Ionicons name="chevron-forward" size={15} color={colors.textSub} />
+                  </View>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* 미완료 계획 알림 */}
-            <View style={[styles.notifRow, { borderColor: colors.border }]}>
-              <View style={styles.notifRowLeft}>
-                <Text style={[styles.notifRowLabel, { color: colors.textMain }]}>미완료 계획 알림</Text>
-                {notifSettings.incompleteEnabled && (
-                  <TouchableOpacity onPress={() => setTimePickerFor('incomplete')} style={styles.timeChip}>
-                    <Ionicons name="time-outline" size={13} color={colors.primary} />
-                    <Text style={[styles.timeChipText, { color: colors.primary }]}>
+            <View style={[styles.notifCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.notifCardTop}>
+                <Text style={[styles.notifCardLabel, { color: colors.textMain }]}>미완료 계획 알림</Text>
+                <Switch
+                  value={notifSettings.incompleteEnabled}
+                  onValueChange={handleToggleIncomplete}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+              <Text style={[styles.notifCardDesc, { color: colors.textSub }]}>
+                완료하지 않은 계획이 있을 때만 알려드려요.
+              </Text>
+              {notifSettings.incompleteEnabled && (
+                <TouchableOpacity
+                  style={[styles.notifTimeRow, { borderTopColor: colors.border }]}
+                  onPress={() => setTimePickerFor('incomplete')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.notifTimeLabel, { color: colors.textSub }]}>알림 시간</Text>
+                  <View style={styles.notifTimeRight}>
+                    <Text style={[styles.notifTimeValue, { color: colors.primary }]}>
                       {fmtTime(notifSettings.incompleteHour, notifSettings.incompleteMinute)}
                     </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              <Switch
-                value={notifSettings.incompleteEnabled}
-                onValueChange={handleToggleIncomplete}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor="#fff"
-              />
+                    <Ionicons name="chevron-forward" size={15} color={colors.textSub} />
+                  </View>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* 입사 기념일 알림 */}
-            <View style={[styles.notifRow, { borderColor: colors.border }]}>
-              <View style={styles.notifRowLeft}>
-                <Text style={[styles.notifRowLabel, { color: colors.textMain }]}>입사 기념일 알림</Text>
-                <Text style={[styles.notifRowSub, { color: colors.textSub }]}>
-                  {joinDate ? '매년 입사일 오전 9:00' : '홈 화면에서 입사일 등록 후 사용 가능'}
-                </Text>
+            <View style={[styles.notifCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.notifCardTop}>
+                <Text style={[styles.notifCardLabel, { color: colors.textMain }]}>입사 기념일 알림</Text>
+                <Switch
+                  value={notifSettings.anniversaryEnabled && !!joinDate}
+                  onValueChange={handleToggleAnniversary}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor="#fff"
+                  disabled={!joinDate}
+                />
               </View>
-              <Switch
-                value={notifSettings.anniversaryEnabled && !!joinDate}
-                onValueChange={handleToggleAnniversary}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor="#fff"
-                disabled={!joinDate}
-              />
+              <Text style={[styles.notifCardDesc, { color: colors.textSub }]}>
+                입사 100일, 1주년 같은 기념일을 알려드려요.
+              </Text>
+              {!joinDate && (
+                <Text style={[styles.notifCardHint, { color: colors.textSub }]}>
+                  홈 화면에서 입사일을 등록하면 활성화됩니다.
+                </Text>
+              )}
             </View>
 
           </View>
@@ -717,18 +745,26 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 16,
   },
   permissionText: { fontSize: 13, fontWeight: '600', flex: 1 },
-  notifRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 14, borderBottomWidth: 1,
+  notifCard: {
+    borderRadius: 16, borderWidth: 1,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4,
+    marginBottom: 12,
   },
-  notifRowLeft: { flex: 1, marginRight: 12 },
-  notifRowLabel: { fontSize: 15, fontWeight: '600', marginBottom: 4 },
-  notifRowSub: { fontSize: 12, fontWeight: '500' },
-  timeChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    alignSelf: 'flex-start',
+  notifCardTop: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 6,
   },
-  timeChipText: { fontSize: 13, fontWeight: '700' },
+  notifCardLabel: { fontSize: 15, fontWeight: '700' },
+  notifCardDesc: { fontSize: 13, fontWeight: '400', lineHeight: 18, marginBottom: 10 },
+  notifCardHint: { fontSize: 12, fontWeight: '500', marginBottom: 10, fontStyle: 'italic' },
+  notifTimeRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1, paddingVertical: 12,
+  },
+  notifTimeLabel: { fontSize: 13, fontWeight: '500' },
+  notifTimeRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  notifTimeValue: { fontSize: 14, fontWeight: '700' },
 
   // 앱 정보 카드
   appInfoCard: {
