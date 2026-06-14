@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 export const NOTIF_SETTINGS_KEY = '@notification_settings';
-export const IS_EXPO_GO = Constants.appOwnership === 'expo';
+export const IS_EXPO_GO = Constants.executionEnvironment === 'storeClient';
 
 export interface NotifSettings {
   dailyPlanEnabled: boolean;

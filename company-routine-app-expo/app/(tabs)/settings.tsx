@@ -452,7 +452,7 @@ export default function SettingsScreen() {
                 />
               </View>
               <Text style={[styles.notifCardDesc, { color: colors.textSub }]}>
-                매일 설정한 시간에 오늘 계획을 알려드려요.
+                매일 설정한 시간에 오늘 계획을 알려드립니다.
               </Text>
               {notifSettings.dailyPlanEnabled && (
                 <TouchableOpacity
@@ -483,7 +483,7 @@ export default function SettingsScreen() {
                 />
               </View>
               <Text style={[styles.notifCardDesc, { color: colors.textSub }]}>
-                완료하지 않은 계획이 있을 때만 알려드려요.
+                완료하지 않은 계획이 있을 경우 알려드립니다.
               </Text>
               {notifSettings.incompleteEnabled && (
                 <TouchableOpacity
@@ -515,7 +515,7 @@ export default function SettingsScreen() {
                 />
               </View>
               <Text style={[styles.notifCardDesc, { color: colors.textSub }]}>
-                입사 100일, 1주년 같은 기념일을 알려드려요.
+                입사 100일, 1주년 등의 기념일을 알려드립니다.
               </Text>
               {!joinDate && (
                 <Text style={[styles.notifCardHint, { color: colors.textSub }]}>
