@@ -22,7 +22,7 @@ import { TOUR_SEEN_KEY } from '@/components/TourOverlay';
 
 const FORMSPREE_ENDPOINT = 'https://formspree.io/f/meedbpgb';
 const APP_VERSION = '1.0.0';
-const PRIVACY_POLICY_URL = 'https://juseonglee11-del.github.io/company-routine-app/privacy-policy.html';
+const PRIVACY_POLICY_URL = 'https://juseonglee11-del.github.io/company-routine-app/company-routine-app-expo/privacy-policy.html';
 
 type InquiryType = '버그 제보' | '기능 제안' | '기타 문의';
 
