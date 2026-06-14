@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { View } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationProvider, Theme } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -169,6 +170,9 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+// Keep splash screen visible while data loads from AsyncStorage
+SplashScreen.preventAutoHideAsync();
+
 const ONBOARDING_DEFAULT_ROUTINES = [
   '🏃 운동 30분',
   '📚 영어 공부 10분',
@@ -237,6 +241,7 @@ export default function RootLayout() {
       console.error('Failed to load data', e);
     } finally {
       setIsLoaded(true);
+      SplashScreen.hideAsync();
     }
   };
 
