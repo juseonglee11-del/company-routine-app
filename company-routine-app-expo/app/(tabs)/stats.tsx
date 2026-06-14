@@ -18,6 +18,7 @@ import {
 import { useAppTheme, isRoutineActiveOnDate } from '../_layout';
 import { JOIN_DATE_KEY } from '@/constants/jobs';
 import { TOUR_STEPS, TOUR_STEP_COUNT } from '@/components/TourOverlay';
+import AdBanner from '@/components/AdBanner';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -293,6 +294,7 @@ export default function StatsScreen() {
             계획을 완료하면 통계가 생성됩니다 📈
           </Text>
         </View>
+        <AdBanner />
       </SafeAreaView>
     );
   }
@@ -349,6 +351,7 @@ export default function StatsScreen() {
         </View>
 
       </ScrollView>
+      <AdBanner />
     </SafeAreaView>
   );
 }

@@ -21,6 +21,7 @@ import { useAppTheme, isRoutineActiveOnDate } from '../_layout';
 import { JOB_CHARACTERS, JOB_CATEGORIES, JOIN_DATE_KEY, JobType } from '@/constants/jobs';
 import { Quote, getRandomQuote } from '@/constants/quotes';
 import { TOUR_SEEN_KEY } from '@/components/TourOverlay';
+import AdBanner from '@/components/AdBanner';
 
 const { width } = Dimensions.get('window');
 const THEME_HINT_KEY = '@theme_hint_dismissed';
@@ -503,6 +504,8 @@ export default function HomeScreen() {
           <Text style={styles.toastText}>기본 계획 4개가 생성되었습니다 🎉</Text>
         </Animated.View>
       )}
+
+      <AdBanner />
 
     </SafeAreaView>
   );
