@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { View } from 'react-native';
+import { View, Platform } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationProvider, Theme } from '@react-navigation/native';
 import { Stack } from 'expo-router';
@@ -172,6 +172,14 @@ export const unstable_settings = {
 
 // Keep splash screen visible while data loads from AsyncStorage
 SplashScreen.preventAutoHideAsync();
+
+// Initialize Google Mobile Ads once at startup (native Android builds only)
+if (Platform.OS === 'android') {
+  try {
+    const mobileAds = require('react-native-google-mobile-ads').default;
+    mobileAds().initialize().catch(() => {});
+  } catch {}
+}
 
 const ONBOARDING_DEFAULT_ROUTINES = [
   '🏃 운동 30분',
