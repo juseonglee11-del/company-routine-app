@@ -426,19 +426,39 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* 권한 없음 배너 */}
-            {permissionGranted === false && (
-              <TouchableOpacity
-                style={[styles.permissionBanner, { backgroundColor: '#FF3B3010', borderColor: '#FF3B3040' }]}
-                onPress={handleRequestPermission}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="alert-circle-outline" size={16} color="#FF3B30" />
-                <Text style={[styles.permissionText, { color: '#FF3B30' }]}>
-                  알림 권한이 없습니다. 탭해서 권한을 허용해주세요.
+            {/* 권한 상태 */}
+            <View style={[
+              styles.permissionCard,
+              {
+                backgroundColor: permissionGranted ? '#34C75910' : '#FF3B3010',
+                borderColor: permissionGranted ? '#34C75940' : '#FF3B3040',
+              },
+            ]}>
+              <View style={styles.permissionStatusRow}>
+                <Ionicons
+                  name={permissionGranted ? 'checkmark-circle' : 'alert-circle'}
+                  size={18}
+                  color={permissionGranted ? '#34C759' : '#FF3B30'}
+                />
+                <Text style={[styles.permissionStatusText, { color: permissionGranted ? '#34C759' : '#FF3B30' }]}>
+                  알림 권한: {permissionGranted ? '허용됨' : '허용 필요'}
                 </Text>
-              </TouchableOpacity>
-            )}
+              </View>
+              {!permissionGranted && (
+                <>
+                  <Text style={[styles.permissionDesc, { color: colors.textSub }]}>
+                    오늘 계획 알림과 미완료 계획 알림을 받으려면 알림 권한을 허용해주세요.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.permissionButton, { backgroundColor: colors.primary }]}
+                    onPress={handleRequestPermission}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.permissionButtonText}>알림 권한 허용</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
 
             {/* 오늘 계획 알림 */}
             <View style={[styles.notifCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -740,11 +760,18 @@ const styles = StyleSheet.create({
   sendButtonText: { color: '#fff', fontSize: 16, fontWeight: '800' },
 
   // 알림 설정 모달
-  permissionBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 16,
+  permissionCard: {
+    borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 16,
   },
-  permissionText: { fontSize: 13, fontWeight: '600', flex: 1 },
+  permissionStatusRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+  },
+  permissionStatusText: { fontSize: 14, fontWeight: '700' },
+  permissionDesc: { fontSize: 13, fontWeight: '400', lineHeight: 18, marginTop: 8, marginBottom: 12 },
+  permissionButton: {
+    borderRadius: 12, paddingVertical: 12, alignItems: 'center', justifyContent: 'center',
+  },
+  permissionButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   notifCard: {
     borderRadius: 16, borderWidth: 1,
     paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4,
