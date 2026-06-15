@@ -15,7 +15,10 @@ import {
   NotifSettings,
   DEFAULT_NOTIF_SETTINGS,
   NOTIF_SETTINGS_KEY,
+  NOTIF_PERMISSION_ASKED_KEY,
+  IS_EXPO_GO,
   setupNotifications,
+  requestNotificationPermissions,
 } from '@/utils/notifications';
 
 const PinkTheme: Theme = {
@@ -222,6 +225,19 @@ export default function RootLayout() {
   useEffect(() => {
     loadAllData();
   }, []);
+
+  // 앱 최초 실행 시 알림 권한 1회 자동 요청 (Expo Go 제외)
+  useEffect(() => {
+    if (!isLoaded || IS_EXPO_GO) return;
+    (async () => {
+      try {
+        const asked = await AsyncStorage.getItem(NOTIF_PERMISSION_ASKED_KEY);
+        if (asked) return;
+        await AsyncStorage.setItem(NOTIF_PERMISSION_ASKED_KEY, 'true');
+        await requestNotificationPermissions();
+      } catch {}
+    })();
+  }, [isLoaded]);
 
   const loadAllData = async () => {
     try {
