@@ -181,7 +181,7 @@ SplashScreen.preventAutoHideAsync();
 setupNotifications();
 
 // Initialize Google Mobile Ads once at startup (native Android builds only)
-if (Platform.OS === 'android') {
+if (!IS_EXPO_GO && Platform.OS === 'android') {
   try {
     const mobileAds = require('react-native-google-mobile-ads').default;
     mobileAds().initialize().catch(() => {});

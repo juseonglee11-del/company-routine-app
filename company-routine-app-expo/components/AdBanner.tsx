@@ -6,23 +6,25 @@ import Constants from 'expo-constants';
 // executionEnvironment === 'storeClient' is more reliable than appOwnership in SDK 54
 const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
-// ── Ad unit selection ─────────────────────────────────────────────
-const isProduction = process.env.EXPO_PUBLIC_APP_ENV === 'production';
-const AD_UNIT_ID = isProduction
-  ? 'ca-app-pub-9888510222037453/5866602592'       // real ad (production only)
-  : 'ca-app-pub-3940256099942544/6300978111';       // Google official test banner
-
 // ── Native module ─────────────────────────────────────────────────
 let NativeBannerAd: React.ComponentType<any> | null = null;
 let NativeBannerAdSize: any = null;
+let testBannerId = 'ca-app-pub-3940256099942544/6300978111'; // TestIds.BANNER fallback
 
 if (!isExpoGo && Platform.OS === 'android') {
   try {
-    const ads      = require('react-native-google-mobile-ads');
+    const ads        = require('react-native-google-mobile-ads');
     NativeBannerAd   = ads.BannerAd;
     NativeBannerAdSize = ads.BannerAdSize;
+    if (ads.TestIds?.BANNER) testBannerId = ads.TestIds.BANNER;
   } catch {}
 }
+
+// ── Ad unit selection ─────────────────────────────────────────────
+const isProduction = process.env.EXPO_PUBLIC_APP_ENV === 'production';
+const AD_UNIT_ID = isProduction
+  ? 'ca-app-pub-9888510222037453/5866602592'  // real banner (production only)
+  : testBannerId;                              // TestIds.BANNER (development / preview)
 
 // ── Component ─────────────────────────────────────────────────────
 type AdState = 'loading' | 'loaded' | 'failed';
