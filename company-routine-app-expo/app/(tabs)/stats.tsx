@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dimensions,
   ScrollView,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
