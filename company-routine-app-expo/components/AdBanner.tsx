@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
-import { Platform, View, StyleSheet } from 'react-native';
+import { Platform, View, Text, StyleSheet } from 'react-native';
 import Constants from 'expo-constants';
 
 // ── Expo Go detection ─────────────────────────────────────────────
-// executionEnvironment === 'storeClient' is more reliable than appOwnership in SDK 54
 const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 // ── Native module ─────────────────────────────────────────────────
 let NativeBannerAd: React.ComponentType<any> | null = null;
 let NativeBannerAdSize: any = null;
-let testBannerId = 'ca-app-pub-3940256099942544/6300978111'; // TestIds.BANNER fallback
+let testBannerId = 'ca-app-pub-3940256099942544/6300978111';
 
 if (!isExpoGo && Platform.OS === 'android') {
   try {
@@ -29,35 +28,65 @@ const AD_UNIT_ID = isProduction
 // ── Component ─────────────────────────────────────────────────────
 type AdState = 'loading' | 'loaded' | 'failed';
 
+function Placeholder() {
+  return (
+    <View style={[StyleSheet.absoluteFill, styles.placeholder]}>
+      <Text style={styles.placeholderText}>광고 영역 테스트</Text>
+    </View>
+  );
+}
+
 export default function AdBanner() {
   const [adState, setAdState] = useState<AdState>('loading');
 
+  // Expo Go: AdMob native module not available
   if (isExpoGo) return null;
-  if (!NativeBannerAd || !NativeBannerAdSize) return null;
-  if (adState === 'failed') return null;
+
+  // Native module failed to load (shouldn't happen in EAS build)
+  if (!NativeBannerAd || !NativeBannerAdSize) {
+    return (
+      <View style={styles.wrapper}>
+        <Placeholder />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.wrapper}>
-      {adState === 'loading' && <View style={[StyleSheet.absoluteFill, styles.loadingBg]} />}
-      <NativeBannerAd
-        unitId={AD_UNIT_ID}
-        size={NativeBannerAdSize.BANNER}
-        onAdLoaded={() => setAdState('loaded')}
-        onAdFailedToLoad={() => setAdState('failed')}
-      />
+      {/* Placeholder shown while loading or on failure */}
+      {adState !== 'loaded' && <Placeholder />}
+
+      {/* BannerAd rendered immediately so it starts loading; hidden via opacity until ready */}
+      {adState !== 'failed' && (
+        <NativeBannerAd
+          unitId={AD_UNIT_ID}
+          size={NativeBannerAdSize.BANNER}
+          onAdLoaded={() => setAdState('loaded')}
+          onAdFailedToLoad={() => setAdState('failed')}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    alignItems: 'center',
-    minHeight: 60,
-    marginVertical: 4,
-  },
-  loadingBg: {
     height: 60,
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  placeholderText: {
+    fontSize: 12,
+    color: '#888',
+    fontWeight: '500',
   },
 });

@@ -361,6 +361,9 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* 5. 광고 배너 — 탭바 바로 위 */}
+        <AdBanner />
+
       </ScrollView>
 
       {/* DateTimePicker — ScrollView 밖에 조건부 렌더링 (New Architecture 호환) */}
@@ -504,8 +507,6 @@ export default function HomeScreen() {
           <Text style={styles.toastText}>기본 계획 4개가 생성되었습니다 🎉</Text>
         </Animated.View>
       )}
-
-      <AdBanner />
 
     </SafeAreaView>
   );

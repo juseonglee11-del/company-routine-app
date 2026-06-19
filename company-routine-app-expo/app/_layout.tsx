@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationProvider, Theme } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as NavigationBar from 'expo-navigation-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
@@ -380,13 +381,33 @@ export default function RootLayout() {
 
   const colors = THEME_COLORS[theme];
 
-  const navTheme =
-    theme === 'dark' ? DarkTheme :
-    theme === 'pink' ? PinkTheme :
-    theme === 'blue' ? BlueTheme :
-    theme === 'green' ? GreenTheme :
+  const baseNavTheme =
+    theme === 'dark'   ? DarkTheme   :
+    theme === 'pink'   ? PinkTheme   :
+    theme === 'blue'   ? BlueTheme   :
+    theme === 'green'  ? GreenTheme  :
     theme === 'yellow' ? YellowTheme :
     DefaultTheme;
+
+  // Override background/card so React Navigation container never shows the
+  // default gray (#F2F2F2) from DefaultTheme through the transparent nav bar.
+  const navTheme: Theme = {
+    ...baseNavTheme,
+    colors: {
+      ...baseNavTheme.colors,
+      background: colors.background,
+      card: colors.card,
+    },
+  };
+
+  // Sync Android navigation bar icon style with current theme.
+  // setButtonStyleAsync works even with edgeToEdgeEnabled: true.
+  // setStyle provides a light/dark hint for the gesture handle / 3-button bar.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    NavigationBar.setButtonStyleAsync(theme === 'dark' ? 'light' : 'dark').catch(() => {});
+    NavigationBar.setStyle(theme === 'dark' ? 'dark' : 'light');
+  }, [theme]);
 
   return (
     <SafeAreaProvider>

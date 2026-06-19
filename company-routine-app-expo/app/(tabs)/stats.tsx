@@ -350,8 +350,10 @@ export default function StatsScreen() {
           )}
         </View>
 
+        {/* 광고 배너 — 탭바 바로 위 */}
+        <AdBanner />
+
       </ScrollView>
-      <AdBanner />
     </SafeAreaView>
   );
 }
